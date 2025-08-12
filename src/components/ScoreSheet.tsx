@@ -14,11 +14,13 @@ import {
   Bold,
   Italic,
   Underline,
+  Piano,
 } from "lucide-react"
 import { notations, getNotationByKey, type Notation } from "../data/notations"
 import html2canvas from "html2canvas"
 import jsPDF from "jspdf"
 import type { TextElement, ArticulationElement } from "../App"
+import PianoComponent from "./Piano"
 
 interface PlacedNotation {
   id: string
@@ -80,9 +82,8 @@ const DEFAULT_TIME_SIGNATURE_POS = { x: 150, y: 130 }
 const DEFAULT_KEY_POS = { x: 150, y: 170 }
 const DEFAULT_TEMPO_POS = { x: 150, y: 200 }
 
-// Updated MIDI mapping: a-z (26 keys) then A-S (19 keys) = 45 total keys
 const midiNoteToNotationMap: { [key: number]: string } = {
-  // a-z mapping (C3 to D5)
+  // a-z mapping (C3 to D5) - optimized for faster lookup
   48: "a",
   49: "b",
   50: "c",
@@ -109,7 +110,7 @@ const midiNoteToNotationMap: { [key: number]: string } = {
   71: "x",
   72: "y",
   73: "z",
-  // A-S mapping (D#5 to A#6)
+  // A-S mapping (D#5 to A#6) - extended range for better coverage
   74: "A",
   75: "B",
   76: "C",
@@ -130,6 +131,9 @@ const midiNoteToNotationMap: { [key: number]: string } = {
   91: "R",
   92: "S",
 }
+
+const MIDI_DEBOUNCE_TIME = 10 // ms - prevent duplicate rapid-fire notes
+const MAX_SIMULTANEOUS_NOTES = 10 // Limit for performance stability
 
 const KEY_SIGNATURE_OPTIONS = [
   { label: "C Major / A Minor", value: "C" },
@@ -169,6 +173,7 @@ const ScoreSheet: React.FC<ScoreSheetProps> = ({
   const [showSettingsDropdown, setShowSettingsDropdown] = useState(false)
   const [showToolsDropdown, setShowToolsDropdown] = useState(false)
   const [showKeyboardHelp, setShowKeyboardHelp] = useState(false)
+  const [showPiano, setShowPiano] = useState(false)
   const [keyboardEnabled, setKeyboardEnabled] = useState(true)
   const [midiEnabled, setMidiEnabled] = useState(false)
   const [midiInputs, setMidiInputs] = useState<MIDIInput[]>([])
@@ -181,6 +186,10 @@ const ScoreSheet: React.FC<ScoreSheetProps> = ({
   const [newTextBold, setNewTextBold] = useState(false)
   const [newTextItalic, setNewTextItalic] = useState(false)
   const [newTextUnderline, setNewTextUnderline] = useState(false)
+
+  const [lastMidiTime, setLastMidiTime] = useState<{ [key: number]: number }>({})
+  const [activeMidiNotes, setActiveMidiNotes] = useState<Set<number>>(new Set())
+  const midiTimeoutRef = useRef<{ [key: number]: NodeJS.Timeout }>({})
 
   // Moved useState calls inside the component and initialized from currentPage or defaults
   const [timeSignaturePos, setTimeSignaturePos] = useState(
@@ -389,7 +398,14 @@ const ScoreSheet: React.FC<ScoreSheetProps> = ({
 
       setNextNotePosition(finalX + NOTATION_KEYBOARD_X_INCREMENT)
     },
-    [nextNotePosition, currentKeyboardLineIndex, currentKeyboardLineY, onAddNote],
+    [
+      nextNotePosition,
+      currentKeyboardLineIndex,
+      currentKeyboardLineY,
+      onAddNote,
+      setNextNotePosition,
+      setCurrentKeyboardLineIndex,
+    ],
   )
 
   const handleKeyPress = useCallback(
@@ -453,6 +469,8 @@ const ScoreSheet: React.FC<ScoreSheetProps> = ({
       currentPage.notes,
       onRemoveNote,
       placeNotation,
+      setNextNotePosition,
+      setCurrentKeyboardLineIndex,
     ],
   )
 
@@ -460,27 +478,87 @@ const ScoreSheet: React.FC<ScoreSheetProps> = ({
     (event: MIDIMessageEvent) => {
       if (!midiEnabled || showSettingsDropdown || showKeyboardHelp || showToolsDropdown || activeTool !== "none") return
 
-      if (!event.data) {
-        console.warn("MIDI message data is null.")
+      if (!event.data || event.data.length < 3) {
+        console.warn("Invalid MIDI message data.")
         return
       }
 
       const status = event.data[0]
       const note = event.data[1]
       const velocity = event.data[2]
+      const currentTime = performance.now()
 
       const NOTE_ON = 0x90
+      const NOTE_OFF = 0x80
+
+      // Handle Note ON messages
       if ((status & 0xf0) === NOTE_ON && velocity > 0) {
+        // Debounce rapid-fire notes for the same key
+        const lastTime = lastMidiTime[note] || 0
+        if (currentTime - lastTime < MIDI_DEBOUNCE_TIME) {
+          return
+        }
+
+        // Limit simultaneous notes for performance
+        if (activeMidiNotes.size >= MAX_SIMULTANEOUS_NOTES) {
+          console.warn("Maximum simultaneous MIDI notes reached")
+          return
+        }
+
         const mappedAlphabet = midiNoteToNotationMap[note]
         if (mappedAlphabet) {
           const mappedNotation = getNotationByKey(mappedAlphabet)
           if (mappedNotation) {
-            placeNotation(mappedNotation)
+            // Update tracking
+            setLastMidiTime((prev) => ({ ...prev, [note]: currentTime }))
+            setActiveMidiNotes((prev) => new Set([...prev, note]))
+
+            // Clear any existing timeout for this note
+            if (midiTimeoutRef.current[note]) {
+              clearTimeout(midiTimeoutRef.current[note])
+            }
+
+            // Set timeout to remove from active notes (cleanup)
+            midiTimeoutRef.current[note] = setTimeout(() => {
+              setActiveMidiNotes((prev) => {
+                const newSet = new Set(prev)
+                newSet.delete(note)
+                return newSet
+              })
+              delete midiTimeoutRef.current[note]
+            }, 1000) // 1 second cleanup
+
+            // Place the notation with optimized timing
+            requestAnimationFrame(() => {
+              placeNotation(mappedNotation)
+            })
           }
         }
       }
+      // Handle Note OFF messages for cleanup
+      else if ((status & 0xf0) === NOTE_OFF || ((status & 0xf0) === NOTE_ON && velocity === 0)) {
+        setActiveMidiNotes((prev) => {
+          const newSet = new Set(prev)
+          newSet.delete(note)
+          return newSet
+        })
+
+        if (midiTimeoutRef.current[note]) {
+          clearTimeout(midiTimeoutRef.current[note])
+          delete midiTimeoutRef.current[note]
+        }
+      }
     },
-    [midiEnabled, showSettingsDropdown, showKeyboardHelp, showToolsDropdown, activeTool, placeNotation],
+    [
+      midiEnabled,
+      showSettingsDropdown,
+      showKeyboardHelp,
+      showToolsDropdown,
+      activeTool,
+      placeNotation,
+      lastMidiTime,
+      activeMidiNotes,
+    ],
   )
 
   const handleImageClick = (event: React.MouseEvent<HTMLDivElement>) => {
@@ -735,6 +813,90 @@ const ScoreSheet: React.FC<ScoreSheetProps> = ({
     return "default"
   }, [activeTool, selectedNotation, keyboardEnabled, midiEnabled, isTextMode, selectedArticulation, draggedScoreInfoId])
 
+  useEffect(() => {
+    if (midiEnabled) {
+      if (!navigator.requestMIDIAccess) {
+        console.warn("Web MIDI API is not supported in this browser.")
+        setMidiEnabled(false)
+        return
+      }
+
+      const enableMidi = async () => {
+        try {
+          const midiAccess = await navigator.requestMIDIAccess({ sysex: false })
+          const inputs: MIDIInput[] = []
+
+          // Enhanced MIDI input setup with better event handling
+          midiAccess.inputs.forEach((input) => {
+            inputs.push(input)
+
+            // Remove any existing listeners to prevent duplicates
+            input.removeEventListener("midimessage", handleMidiMessage)
+            input.addEventListener("midimessage", handleMidiMessage)
+
+            // Add connection state monitoring
+            input.addEventListener("statechange", (e) => {
+              const target = e.target as MIDIInput
+              console.log(`MIDI Input ${target.name} state: ${target.state}`)
+              if (target.state === "disconnected") {
+                console.warn(`MIDI device ${target.name} disconnected`)
+              }
+            })
+          })
+
+          setMidiInputs(inputs)
+          console.log(`MIDI enabled. ${inputs.length} input device(s) connected.`)
+
+          // Monitor for new MIDI devices
+          midiAccess.addEventListener("statechange", (e) => {
+            const port = e.port as MIDIInput
+            if (port.type === "input") {
+              if (port.state === "connected") {
+                console.log(`New MIDI input connected: ${port.name}`)
+                port.addEventListener("midimessage", handleMidiMessage)
+                setMidiInputs((prev) => [...prev.filter((input) => input.id !== port.id), port])
+              } else if (port.state === "disconnected") {
+                console.log(`MIDI input disconnected: ${port.name}`)
+                setMidiInputs((prev) => prev.filter((input) => input.id !== port.id))
+              }
+            }
+          })
+        } catch (error) {
+          console.error("Failed to access MIDI devices:", error)
+          setMidiEnabled(false)
+        }
+      }
+
+      enableMidi()
+
+      // Cleanup function
+      return () => {
+        midiInputs.forEach((input) => {
+          input.removeEventListener("midimessage", handleMidiMessage)
+        })
+        // Clear all MIDI timeouts
+        Object.values(midiTimeoutRef.current).forEach((timeout) => {
+          clearTimeout(timeout)
+        })
+        midiTimeoutRef.current = {}
+        setActiveMidiNotes(new Set())
+        setLastMidiTime({})
+      }
+    } else {
+      // Cleanup when MIDI is disabled
+      midiInputs.forEach((input) => {
+        input.removeEventListener("midimessage", handleMidiMessage)
+      })
+      Object.values(midiTimeoutRef.current).forEach((timeout) => {
+        clearTimeout(timeout)
+      })
+      midiTimeoutRef.current = {}
+      setActiveMidiNotes(new Set())
+      setLastMidiTime({})
+      setMidiInputs([])
+    }
+  }, [midiEnabled, handleMidiMessage])
+
   // Event listeners setup
   useEffect(() => {
     if (keyboardEnabled) {
@@ -762,7 +924,7 @@ const ScoreSheet: React.FC<ScoreSheetProps> = ({
       setNextNotePosition(INITIAL_KEYBOARD_NOTE_X_POSITION)
       setCurrentKeyboardLineIndex(0)
     }
-  }, [currentPage.notes])
+  }, [currentPage.notes, setNextNotePosition, setCurrentKeyboardLineIndex])
 
   useEffect(() => {
     if (keyboardEnabled) {
@@ -774,45 +936,46 @@ const ScoreSheet: React.FC<ScoreSheetProps> = ({
     }
   }, [keyboardEnabled])
 
-  useEffect(() => {
-    if (midiEnabled) {
-      if (!navigator.requestMIDIAccess) {
-        console.warn("Web MIDI API is not supported in this browser.")
-        setMidiEnabled(false)
-        return
-      }
+  const renderBeatLines = () => {
+    const horizontalLines = KEYBOARD_LINE_Y_POSITIONS.map((yPos, index) => (
+      <div
+        key={`horizontal-${index}`}
+        className="absolute bg-gray-300 opacity-60"
+        style={{
+          left: `${NOTE_BOUNDARY_LEFT}px`,
+          top: `${yPos}px`,
+          width: `${NOTE_BOUNDARY_RIGHT - NOTE_BOUNDARY_LEFT}px`,
+          height: "1px",
+          zIndex: 5,
+        }}
+      />
+    ))
 
-      const enableMidi = async () => {
-        try {
-          const midiAccess = await navigator.requestMIDIAccess()
-          const inputs: MIDIInput[] = []
-          midiAccess.inputs.forEach((input) => {
-            inputs.push(input)
-            input.addEventListener("midimessage", handleMidiMessage)
-          })
-          setMidiInputs(inputs)
-          console.log("MIDI enabled. Listening for messages.")
-        } catch (error) {
-          console.error("Failed to access MIDI devices:", error)
-          setMidiEnabled(false)
-        }
-      }
+    // Calculate vertical beat lines based on time signature numerator
+    const numVerticalLines = currentPage.timeSignature.numerator
+    const totalWidth = NOTE_BOUNDARY_RIGHT - NOTE_BOUNDARY_LEFT
+    const spacing = totalWidth / numVerticalLines
 
-      enableMidi()
+    const verticalLines = Array.from({ length: numVerticalLines }, (_, index) => {
+      const xPos = NOTE_BOUNDARY_LEFT + spacing * (index + 1)
 
-      return () => {
-        midiInputs.forEach((input) => {
-          input.removeEventListener("midimessage", handleMidiMessage)
-        })
-        setMidiInputs([])
-      }
-    } else {
-      midiInputs.forEach((input) => {
-        input.removeEventListener("midimessage", handleMidiMessage)
-      })
-      setMidiInputs([])
-    }
-  }, [midiEnabled, handleMidiMessage])
+      return KEYBOARD_LINE_Y_POSITIONS.map((yPos, yIndex) => (
+        <div
+          key={`vertical-${index}-${yIndex}`}
+          className="absolute bg-blue-400 opacity-40"
+          style={{
+            left: `${xPos}px`,
+            top: `${yPos + 15}px`, // Extend above the horizontal line
+            width: "1px",
+            height: "40px", // Extend below the horizontal line
+            zIndex: 6,
+          }}
+        />
+      ))
+    }).flat()
+
+    return [...horizontalLines, ...verticalLines]
+  }
 
   return (
     <div
@@ -946,6 +1109,16 @@ const ScoreSheet: React.FC<ScoreSheetProps> = ({
                   <div className="absolute right-0 mt-2 w-48 p-2 bg-white border border-gray-200 rounded-md shadow-lg z-50">
                     <div className="px-2 py-1 text-sm font-semibold text-gray-700">Actions</div>
                     <div className="my-1 h-px bg-gray-200" />
+                    <button
+                      onClick={() => {
+                        setShowPiano(true)
+                        setShowToolsDropdown(false)
+                      }}
+                      className="flex items-center gap-2 w-full text-left px-2 py-1.5 text-sm text-gray-700 hover:bg-gray-100 rounded-sm"
+                    >
+                      <Piano className="w-3 h-3" />
+                      Piano
+                    </button>
                     <button
                       onClick={() => {
                         setShowKeyboardHelp(true)
@@ -1088,6 +1261,8 @@ const ScoreSheet: React.FC<ScoreSheetProps> = ({
               objectFit: "cover",
             }}
           />
+
+          {renderBeatLines()}
 
           {/* Score Sheet Info Display with positioning */}
           <div
@@ -1263,67 +1438,6 @@ const ScoreSheet: React.FC<ScoreSheetProps> = ({
                 }}
               />
             )}
-
-            
-          </div>
-        </div>
-
-        {/* Instructions */}
-        <div className="mt-8 bg-gradient-to-r from-blue-50 to-purple-50 border border-blue-200 rounded-2xl p-6 shadow-lg">
-          <h3 className="font-bold text-blue-900 mb-4 text-lg">Enhanced DNG Studios Features:</h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <ul className="text-sm text-blue-800 space-y-2">
-              <li className="flex items-center gap-2">
-                <div className="w-2 h-2 bg-purple-500 rounded-full"></div>
-                <strong>NEW:</strong> Right sidebar with articulations and text tools
-              </li>
-              <li className="flex items-center gap-2">
-                <div className="w-2 h-2 bg-purple-500 rounded-full"></div>
-                <strong>NEW:</strong> Click articulations to place musical symbols
-              </li>
-              <li className="flex items-center gap-2">
-                <div className="w-2 h-2 bg-purple-500 rounded-full"></div>
-                <strong>NEW:</strong> Text tool with formatting (bold, italic, underline, size)
-              </li>
-              <li className="flex items-center gap-2">
-                <div className="w-2 h-2 bg-purple-500 rounded-full"></div>
-                <strong>NEW:</strong> Position controls for key, tempo, and time signature
-              </li>
-              <li className="flex items-center gap-2">
-                <div className="w-2 h-2 bg-purple-500 rounded-full"></div>
-                <strong>NEW:</strong> Built-in metronome with high-quality sound
-              </li>
-              <li className="flex items-center gap-2">
-                <div className="w-2 h-2 bg-purple-500 rounded-full"></div>
-                <strong>FIXED:</strong> MIDI mapping now supports a-z then A-S (45 keys total)
-              </li>
-            </ul>
-            <ul className="text-sm text-blue-800 space-y-2">
-              <li className="flex items-center gap-2">
-                <div className="w-2 h-2 bg-purple-500 rounded-full"></div>
-                Keyboard input with automatic line wrapping
-              </li>
-              <li className="flex items-center gap-2">
-                <div className="w-2 h-2 bg-purple-500 rounded-full"></div>
-                MIDI device support for real-time notation placement
-              </li>
-              <li className="flex items-center gap-2">
-                <div className="w-2 h-2 bg-purple-500 rounded-full"></div>
-                Drawing tools for freehand annotations
-              </li>
-              <li className="flex items-center gap-2">
-                <div className="w-2 h-2 bg-purple-500 rounded-full"></div>
-                Export to PDF functionality
-              </li>
-              <li className="flex items-center gap-2">
-                <div className="w-2 h-2 bg-purple-500 rounded-full"></div>
-                Drag and drop text elements for repositioning
-              </li>
-              <li className="flex items-center gap-2">
-                <div className="w-2 h-2 bg-purple-500 rounded-full"></div>
-                Real-time tempo adjustment with metronome sync
-              </li>
-            </ul>
           </div>
         </div>
       </div>
@@ -1539,6 +1653,8 @@ const ScoreSheet: React.FC<ScoreSheetProps> = ({
           </div>
         </div>
       )}
+
+      <PianoComponent isOpen={showPiano} onClose={() => setShowPiano(false)} />
     </div>
   )
 }

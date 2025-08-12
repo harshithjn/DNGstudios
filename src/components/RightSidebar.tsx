@@ -34,7 +34,7 @@ const RightSidebar: React.FC<RightSidebarProps> = ({
   isTextMode,
   onTextModeToggle,
   currentPage,
-  onUpdatePageSettings,
+  
 }) => {
   const [metronomeEnabled, setMetronomeEnabled] = useState(false)
   const [metronomeInterval, setMetronomeInterval] = useState<ReturnType<typeof setInterval> | null>(null)
