@@ -1366,8 +1366,8 @@ const ScoreSheet: React.FC<ScoreSheetProps> = ({
               >
                 <div className="relative">
                   <img
-                    src={placedNote.notation.image || "/placeholder.svg"}
-                    alt={placedNote.notation.name}
+                    src={placedNote.notation?.image || "/placeholder.svg"}
+                    alt={placedNote.notation?.name || "Note"}
                     className="w-[72px] h-[72px] object-contain drop-shadow-md"
                   />
                   <button
