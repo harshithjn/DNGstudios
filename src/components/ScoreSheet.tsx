@@ -77,10 +77,12 @@ const KEYBOARD_LINE_Y_POSITIONS = [230, 338, 446, 553, 659, 764, 872, 980, 1087,
 const NOTE_BOUNDARY_LEFT = INITIAL_KEYBOARD_NOTE_X_POSITION
 const NOTE_BOUNDARY_RIGHT = 1000
 
-// Default positions if not provided by currentPage
-const DEFAULT_TIME_SIGNATURE_POS = { x: 150, y: 130 }
-const DEFAULT_KEY_POS = { x: 150, y: 170 }
-const DEFAULT_TEMPO_POS = { x: 150, y: 200 }
+const TIME_SIGNATURE_LINE_CONFIG = {
+  X_OFFSET: -35, // Horizontal offset from calculated position
+  Y_OFFSET: 5, // Vertical offset from staff line (negative = above)
+  THICKNESS: 3, // Line thickness in pixels
+  HEIGHT: 50, // Line height in pixels
+}
 
 const midiNoteToNotationMap: { [key: number]: string } = {
   // a-z mapping (C3 to D5) - optimized for faster lookup
@@ -152,6 +154,11 @@ const TIME_SIGNATURE_OPTIONS = [
   { label: "3/3", numerator: 3, denominator: 3 },
 ]
 
+// Define default positions for score info elements
+const DEFAULT_TIME_SIGNATURE_POS = { x: 150, y: 120 }
+const DEFAULT_KEY_POS = { x: 150, y: 160 }
+const DEFAULT_TEMPO_POS = { x: 150, y: 190 }
+
 const ScoreSheet: React.FC<ScoreSheetProps> = ({
   selectedNotation,
   currentPage,
@@ -187,9 +194,10 @@ const ScoreSheet: React.FC<ScoreSheetProps> = ({
   const [newTextItalic, setNewTextItalic] = useState(false)
   const [newTextUnderline, setNewTextUnderline] = useState(false)
 
+  const midiTimeoutRef = useRef<{ [key: number]: number }>({})
+
   const [lastMidiTime, setLastMidiTime] = useState<{ [key: number]: number }>({})
   const [activeMidiNotes, setActiveMidiNotes] = useState<Set<number>>(new Set())
-  const midiTimeoutRef = useRef<{ [key: number]: NodeJS.Timeout }>({})
 
   // Moved useState calls inside the component and initialized from currentPage or defaults
   const [timeSignaturePos, setTimeSignaturePos] = useState(
@@ -204,6 +212,46 @@ const ScoreSheet: React.FC<ScoreSheetProps> = ({
     setKeyPos(currentPage.keySignaturePosition || DEFAULT_KEY_POS)
     setTempoPos(currentPage.tempoPosition || DEFAULT_TEMPO_POS)
   }, [currentPage.timeSignaturePosition, currentPage.keySignaturePosition, currentPage.tempoPosition])
+
+  const calculateTimeSignatureLines = useCallback(() => {
+    const { numerator, denominator } = currentPage.timeSignature
+    const lines: { x: number; y: number }[] = []
+
+    // Calculate dynamic spacing: divide available width by number of beats + 1 for proper measure divisions
+    const availableWidth = NOTE_BOUNDARY_RIGHT - NOTE_BOUNDARY_LEFT
+    const dynamicSpacing = availableWidth / (numerator + 1)
+    const numberOfLines = numerator + 1 // One line per beat plus one at the end
+
+    for (let i = 0; i < numberOfLines; i++) {
+      const x = NOTE_BOUNDARY_LEFT + i * dynamicSpacing + TIME_SIGNATURE_LINE_CONFIG.X_OFFSET
+
+      if (x <= NOTE_BOUNDARY_RIGHT) {
+        KEYBOARD_LINE_Y_POSITIONS.forEach((yPos) => {
+          lines.push({ x, y: yPos + TIME_SIGNATURE_LINE_CONFIG.Y_OFFSET })
+        })
+      }
+    }
+
+    return lines
+  }, [currentPage.timeSignature])
+
+  const renderTimeSignatureLines = () => {
+    const lines = calculateTimeSignatureLines()
+
+    return lines.map((line, index) => (
+      <div
+        key={`time-line-${index}`}
+        className="absolute bg-gray-300 opacity-40"
+        style={{
+          left: `${line.x}px`,
+          top: `${line.y + TIME_SIGNATURE_LINE_CONFIG.Y_OFFSET}px`,
+          width: `${TIME_SIGNATURE_LINE_CONFIG.THICKNESS}px`,
+          height: `${TIME_SIGNATURE_LINE_CONFIG.HEIGHT}px`,
+          zIndex: 15,
+        }}
+      />
+    ))
+  }
 
   const currentKeyboardLineY = KEYBOARD_LINE_Y_POSITIONS[currentKeyboardLineIndex]
 
@@ -940,7 +988,7 @@ const ScoreSheet: React.FC<ScoreSheetProps> = ({
     const horizontalLines = KEYBOARD_LINE_Y_POSITIONS.map((yPos, index) => (
       <div
         key={`horizontal-${index}`}
-        className="absolute bg-gray-300 opacity-60"
+        className="absolute bg-gray-400 opacity-30"
         style={{
           left: `${NOTE_BOUNDARY_LEFT}px`,
           top: `${yPos}px`,
@@ -951,30 +999,7 @@ const ScoreSheet: React.FC<ScoreSheetProps> = ({
       />
     ))
 
-    // Calculate vertical beat lines based on time signature numerator
-    const numVerticalLines = currentPage.timeSignature.numerator
-    const totalWidth = NOTE_BOUNDARY_RIGHT - NOTE_BOUNDARY_LEFT
-    const spacing = totalWidth / numVerticalLines
-
-    const verticalLines = Array.from({ length: numVerticalLines }, (_, index) => {
-      const xPos = NOTE_BOUNDARY_LEFT + spacing * (index + 1)
-
-      return KEYBOARD_LINE_Y_POSITIONS.map((yPos, yIndex) => (
-        <div
-          key={`vertical-${index}-${yIndex}`}
-          className="absolute bg-blue-400 opacity-40"
-          style={{
-            left: `${xPos}px`,
-            top: `${yPos + 15}px`, // Extend above the horizontal line
-            width: "1px",
-            height: "40px", // Extend below the horizontal line
-            zIndex: 6,
-          }}
-        />
-      ))
-    }).flat()
-
-    return [...horizontalLines, ...verticalLines]
+    return horizontalLines
   }
 
   return (
@@ -1263,6 +1288,8 @@ const ScoreSheet: React.FC<ScoreSheetProps> = ({
           />
 
           {renderBeatLines()}
+
+          {renderTimeSignatureLines()}
 
           {/* Score Sheet Info Display with positioning */}
           <div
