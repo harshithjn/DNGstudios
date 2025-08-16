@@ -134,8 +134,8 @@ const midiNoteToNotationMap: { [key: number]: string } = {
   92: "S",
 }
 
-const MIDI_DEBOUNCE_TIME = 10 // ms - prevent duplicate rapid-fire notes
-const MAX_SIMULTANEOUS_NOTES = 10 // Limit for performance stability
+// const MIDI_DEBOUNCE_TIME = 10 // ms - prevent duplicate rapid-fire notes
+// const MAX_SIMULTANEOUS_NOTES = 10 // Limit for performance stability
 
 const KEY_SIGNATURE_OPTIONS = [
   { label: "C Major / A Minor", value: "C" },
@@ -196,8 +196,8 @@ const ScoreSheet: React.FC<ScoreSheetProps> = ({
 
   const midiTimeoutRef = useRef<{ [key: number]: number }>({})
 
-  const [lastMidiTime, setLastMidiTime] = useState<{ [key: number]: number }>({})
-  const [activeMidiNotes, setActiveMidiNotes] = useState<Set<number>>(new Set())
+  // const [lastMidiTime, setLastMidiTime] = useState<{ [key: number]: number }>({})
+  // const [activeMidiNotes, setActiveMidiNotes] = useState<Set<number>>(new Set())
 
   // Moved useState calls inside the component and initialized from currentPage or defaults
   const [timeSignaturePos, setTimeSignaturePos] = useState(
@@ -380,42 +380,39 @@ const ScoreSheet: React.FC<ScoreSheetProps> = ({
     [timeSignaturePos, keyPos, tempoPos],
   )
 
-  const handleScoreInfoMouseMove = useCallback(
-    (e: React.MouseEvent) => {
-      if (!draggedScoreInfoId) return
-      e.preventDefault()
+  // const handleScoreInfoMouseMove = useCallback(
+  //   (e: React.MouseEvent) => {
+  //     if (!draggedScoreInfoId) return
+  //     e.preventDefault()
+  //
+  //     const newX = e.clientX - scoreInfoDragOffset.x
+  //     const newY = e.clientY - scoreInfoDragOffset.y
+  //
+  //     if (draggedScoreInfoId === "timeSignature") {
+  //       setTimeSignaturePos({ x: newX, y: newY })
+  //     } else if (draggedScoreInfoId === "key") {
+  //       setKeyPos({ x: newX, y: newY })
+  //     } else {
+  //       // tempo
+  //       setTempoPos({ x: newX, y: newY })
+  //     }
+  //   },
+  //   [draggedScoreInfoId, scoreInfoDragOffset],
+  // )
 
-      const newX = e.clientX - scoreInfoDragOffset.x
-      const newY = e.clientY - scoreInfoDragOffset.y
-
-      if (draggedScoreInfoId === "timeSignature") {
-        setTimeSignaturePos({ x: newX, y: newY })
-      } else if (draggedScoreInfoId === "key") {
-        setKeyPos({ x: newX, y: newY })
-      } else {
-        // tempo
-        setTempoPos({ x: newX, y: newY })
-      }
-    },
-    [draggedScoreInfoId, scoreInfoDragOffset],
-  )
-
-  const handleScoreInfoMouseUp = useCallback(() => {
-    if (!draggedScoreInfoId) return
-
-    // Persist the new positions to currentPage
-    if (draggedScoreInfoId === "timeSignature") {
-      onUpdatePageSettings({ timeSignaturePosition: timeSignaturePos })
-    } else if (draggedScoreInfoId === "key") {
-      onUpdatePageSettings({ keySignaturePosition: keyPos })
-    } else {
-      // tempo
-      onUpdatePageSettings({ tempoPosition: tempoPos })
-    }
-
-    setDraggedScoreInfoId(null)
-    setScoreInfoDragOffset({ x: 0, y: 0 })
-  }, [draggedScoreInfoId, timeSignaturePos, keyPos, tempoPos, onUpdatePageSettings])
+  // const handleScoreInfoMouseUp = useCallback(() => {
+  //   if (!draggedScoreInfoId) return
+  //
+  //   // Persist the new positions to currentPage
+  //   if (draggedScoreInfoId === "timeSignature") {
+  //     onUpdatePageSettings({ timeSignaturePosition: timeSignaturePos })
+  //   } else if (draggedScoreInfoId === "key") {
+  //     onUpdatePageSettings({ keySignaturePosition: keyPos })
+  //   } else {
+  //     // tempo
+  //     onUpdatePageSettings({ tempoPosition: tempoPos })
+  //   }
+  // }, [draggedScoreInfoId, timeSignaturePos, keyPos, tempoPos, onUpdatePageSettings])
 
   const placeNotation = useCallback(
     (mappedNotation: Notation) => {
@@ -534,79 +531,23 @@ const ScoreSheet: React.FC<ScoreSheetProps> = ({
       const status = event.data[0]
       const note = event.data[1]
       const velocity = event.data[2]
-      const currentTime = performance.now()
+      // const currentTime = performance.now()
 
       const NOTE_ON = 0x90
-      const NOTE_OFF = 0x80
+      // const NOTE_OFF = 0x80
 
       // Handle Note ON messages
       if ((status & 0xf0) === NOTE_ON && velocity > 0) {
-        // Debounce rapid-fire notes for the same key
-        const lastTime = lastMidiTime[note] || 0
-        if (currentTime - lastTime < MIDI_DEBOUNCE_TIME) {
-          return
-        }
-
-        // Limit simultaneous notes for performance
-        if (activeMidiNotes.size >= MAX_SIMULTANEOUS_NOTES) {
-          console.warn("Maximum simultaneous MIDI notes reached")
-          return
-        }
-
         const mappedAlphabet = midiNoteToNotationMap[note]
         if (mappedAlphabet) {
           const mappedNotation = getNotationByKey(mappedAlphabet)
           if (mappedNotation) {
-            // Update tracking
-            setLastMidiTime((prev) => ({ ...prev, [note]: currentTime }))
-            setActiveMidiNotes((prev) => new Set([...prev, note]))
-
-            // Clear any existing timeout for this note
-            if (midiTimeoutRef.current[note]) {
-              clearTimeout(midiTimeoutRef.current[note])
-            }
-
-            // Set timeout to remove from active notes (cleanup)
-            midiTimeoutRef.current[note] = setTimeout(() => {
-              setActiveMidiNotes((prev) => {
-                const newSet = new Set(prev)
-                newSet.delete(note)
-                return newSet
-              })
-              delete midiTimeoutRef.current[note]
-            }, 1000) // 1 second cleanup
-
-            // Place the notation with optimized timing
-            requestAnimationFrame(() => {
-              placeNotation(mappedNotation)
-            })
+            placeNotation(mappedNotation)
           }
         }
       }
-      // Handle Note OFF messages for cleanup
-      else if ((status & 0xf0) === NOTE_OFF || ((status & 0xf0) === NOTE_ON && velocity === 0)) {
-        setActiveMidiNotes((prev) => {
-          const newSet = new Set(prev)
-          newSet.delete(note)
-          return newSet
-        })
-
-        if (midiTimeoutRef.current[note]) {
-          clearTimeout(midiTimeoutRef.current[note])
-          delete midiTimeoutRef.current[note]
-        }
-      }
     },
-    [
-      midiEnabled,
-      showSettingsDropdown,
-      showKeyboardHelp,
-      showToolsDropdown,
-      activeTool,
-      placeNotation,
-      lastMidiTime,
-      activeMidiNotes,
-    ],
+    [midiEnabled, showSettingsDropdown, showKeyboardHelp, showToolsDropdown, activeTool, placeNotation],
   )
 
   const handleImageClick = (event: React.MouseEvent<HTMLDivElement>) => {
@@ -927,8 +868,8 @@ const ScoreSheet: React.FC<ScoreSheetProps> = ({
           clearTimeout(timeout)
         })
         midiTimeoutRef.current = {}
-        setActiveMidiNotes(new Set())
-        setLastMidiTime({})
+        // setActiveMidiNotes(new Set())
+        // setLastMidiTime({})
       }
     } else {
       // Cleanup when MIDI is disabled
@@ -939,8 +880,8 @@ const ScoreSheet: React.FC<ScoreSheetProps> = ({
         clearTimeout(timeout)
       })
       midiTimeoutRef.current = {}
-      setActiveMidiNotes(new Set())
-      setLastMidiTime({})
+      // setActiveMidiNotes(new Set())
+      // setLastMidiTime({})
       setMidiInputs([])
     }
   }, [midiEnabled, handleMidiMessage])
