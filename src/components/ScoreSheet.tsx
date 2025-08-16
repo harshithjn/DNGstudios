@@ -193,6 +193,7 @@ const ScoreSheet: React.FC<ScoreSheetProps> = ({
   const [newTextBold, setNewTextBold] = useState(false)
   const [newTextItalic, setNewTextItalic] = useState(false)
   const [newTextUnderline, setNewTextUnderline] = useState(false)
+  const [showDeleteFeedback, setShowDeleteFeedback] = useState(false)
 
   const midiTimeoutRef = useRef<{ [key: number]: number }>({})
 
@@ -214,7 +215,7 @@ const ScoreSheet: React.FC<ScoreSheetProps> = ({
   }, [currentPage.timeSignaturePosition, currentPage.keySignaturePosition, currentPage.tempoPosition])
 
   const calculateTimeSignatureLines = useCallback(() => {
-    const { numerator, denominator } = currentPage.timeSignature
+    const { numerator } = currentPage.timeSignature
     const lines: { x: number; y: number }[] = []
 
     // Calculate dynamic spacing: divide available width by number of beats + 1 for proper measure divisions
@@ -270,9 +271,7 @@ const ScoreSheet: React.FC<ScoreSheetProps> = ({
   const [draggedArticulationId, setDraggedArticulationId] = useState<string | null>(null)
   const [articulationDragOffset, setArticulationDragOffset] = useState({ x: 0, y: 0 })
 
-  // New drag state for score info elements
-  const [draggedScoreInfoId, setDraggedScoreInfoId] = useState<"timeSignature" | "key" | "tempo" | null>(null)
-  const [scoreInfoDragOffset, setScoreInfoDragOffset] = useState({ x: 0, y: 0 })
+
 
   // Keep ScoreSheet in sync with RightSidebar eraser (and future tools) via custom event
   useEffect(() => {
@@ -352,33 +351,7 @@ const ScoreSheet: React.FC<ScoreSheetProps> = ({
     setArticulationDragOffset({ x: 0, y: 0 })
   }, [])
 
-  // New drag handlers for score info elements
-  const handleScoreInfoMouseDown = useCallback(
-    (e: React.MouseEvent, id: "timeSignature" | "key" | "tempo") => {
-      e.preventDefault()
-      e.stopPropagation()
-      setDraggedScoreInfoId(id)
 
-      let currentX, currentY
-      if (id === "timeSignature") {
-        currentX = timeSignaturePos.x
-        currentY = timeSignaturePos.y
-      } else if (id === "key") {
-        currentX = keyPos.x
-        currentY = keyPos.y
-      } else {
-        // tempo
-        currentX = tempoPos.x
-        currentY = tempoPos.y
-      }
-
-      setScoreInfoDragOffset({
-        x: e.clientX - currentX,
-        y: e.clientY - currentY,
-      })
-    },
-    [timeSignaturePos, keyPos, tempoPos],
-  )
 
   // const handleScoreInfoMouseMove = useCallback(
   //   (e: React.MouseEvent) => {
@@ -413,6 +386,40 @@ const ScoreSheet: React.FC<ScoreSheetProps> = ({
   //     onUpdatePageSettings({ tempoPosition: tempoPos })
   //   }
   // }, [draggedScoreInfoId, timeSignaturePos, keyPos, tempoPos, onUpdatePageSettings])
+
+  // Helper function to handle note deletion and cursor positioning
+  const handleNoteDeletion = useCallback((noteId: string) => {
+    const noteIndex = currentPage.notes.findIndex(note => note.id === noteId)
+    if (noteIndex === -1) return
+
+    const isLastNote = noteIndex === currentPage.notes.length - 1
+    const remainingNotesCount = currentPage.notes.length - 1
+    
+    onRemoveNote(noteId)
+    
+    // Show delete feedback
+    setShowDeleteFeedback(true)
+    setTimeout(() => setShowDeleteFeedback(false), 1000)
+    
+    // Update cursor position if it was the last note
+    if (isLastNote) {
+      if (remainingNotesCount > 0) {
+        // If there are more notes, position cursor after the new last note
+        const newLastNote = currentPage.notes[remainingNotesCount - 1]
+        setNextNotePosition(newLastNote.x + NOTATION_KEYBOARD_X_INCREMENT)
+        
+        // Update keyboard line position
+        const lastNoteLineIndex = KEYBOARD_LINE_Y_POSITIONS.indexOf(newLastNote.y)
+        if (lastNoteLineIndex !== -1) {
+          setCurrentKeyboardLineIndex(lastNoteLineIndex)
+        }
+      } else {
+        // If no notes left, reset to initial position
+        setNextNotePosition(INITIAL_KEYBOARD_NOTE_X_POSITION)
+        setCurrentKeyboardLineIndex(0)
+      }
+    }
+  }, [currentPage.notes, onRemoveNote, setNextNotePosition, setCurrentKeyboardLineIndex])
 
   const placeNotation = useCallback(
     (mappedNotation: Notation) => {
@@ -477,7 +484,7 @@ const ScoreSheet: React.FC<ScoreSheetProps> = ({
         event.stopPropagation()
         if (currentPage.notes.length > 0) {
           const lastNote = currentPage.notes[currentPage.notes.length - 1]
-          onRemoveNote(lastNote.id)
+          handleNoteDeletion(lastNote.id)
         }
         return
       }
@@ -531,12 +538,10 @@ const ScoreSheet: React.FC<ScoreSheetProps> = ({
       const status = event.data[0]
       const note = event.data[1]
       const velocity = event.data[2]
-      // const currentTime = performance.now()
 
       const NOTE_ON = 0x90
-      // const NOTE_OFF = 0x80
 
-      // Handle Note ON messages
+      // Handle Note ON messages with velocity > 0
       if ((status & 0xf0) === NOTE_ON && velocity > 0) {
         const mappedAlphabet = midiNoteToNotationMap[note]
         if (mappedAlphabet) {
@@ -798,9 +803,8 @@ const ScoreSheet: React.FC<ScoreSheetProps> = ({
     if (isTextMode) return "text"
     if (selectedArticulation) return "crosshair"
     if (selectedNotation && activeTool === "none" && !keyboardEnabled && !midiEnabled) return "crosshair"
-    if (draggedScoreInfoId) return "grabbing" // Cursor for dragging score info
     return "default"
-  }, [activeTool, selectedNotation, keyboardEnabled, midiEnabled, isTextMode, selectedArticulation, draggedScoreInfoId])
+  }, [activeTool, selectedNotation, keyboardEnabled, midiEnabled, isTextMode, selectedArticulation])
 
   useEffect(() => {
     if (midiEnabled) {
@@ -884,7 +888,7 @@ const ScoreSheet: React.FC<ScoreSheetProps> = ({
       // setLastMidiTime({})
       setMidiInputs([])
     }
-  }, [midiEnabled, handleMidiMessage])
+  }, [midiEnabled, handleMidiMessage, midiInputs])
 
   // Event listeners setup
   useEffect(() => {
@@ -1195,15 +1199,25 @@ const ScoreSheet: React.FC<ScoreSheetProps> = ({
                       : selectedArticulation
                         ? `Articulation Mode Active - ${selectedArticulation}`
                         : keyboardEnabled && midiEnabled
-                          ? "Keyboard & MIDI Modes Active"
+                          ? "Keyboard & MIDI Modes Active - Press Backspace to delete last note"
                           : keyboardEnabled
-                            ? "Keyboard Mode Active"
+                            ? "Keyboard Mode Active - Press Backspace to delete last note"
                             : "MIDI Mode Active"}
                   </span>
                 </div>
               </div>
             </div>
           ))}
+
+        {/* Delete Feedback */}
+        {showDeleteFeedback && (
+          <div className="mb-4 bg-red-50 border border-red-200 rounded-lg p-3 animate-pulse">
+            <div className="flex items-center gap-2 text-red-800 text-sm">
+              <Trash2 className="w-4 h-4" />
+              <span className="font-medium">Note deleted!</span>
+            </div>
+          </div>
+        )}
 
         {/* Score Sheet Area */}
         <div
@@ -1239,7 +1253,6 @@ const ScoreSheet: React.FC<ScoreSheetProps> = ({
               left: `${timeSignaturePos.x}px`,
               top: `${timeSignaturePos.y}px`,
             }}
-            onMouseDown={(e) => handleScoreInfoMouseDown(e, "timeSignature")}
           >
             <div className="flex items-baseline gap-2">
               <span className="text-2xl">{currentPage.timeSignature.numerator} /</span>
@@ -1253,7 +1266,6 @@ const ScoreSheet: React.FC<ScoreSheetProps> = ({
               left: `${keyPos.x}px`,
               top: `${keyPos.y}px`,
             }}
-            onMouseDown={(e) => handleScoreInfoMouseDown(e, "key")}
           >
             Key:{" "}
             {KEY_SIGNATURE_OPTIONS.find((k) => k.value === currentPage.keySignature)?.label || currentPage.keySignature}
@@ -1265,7 +1277,6 @@ const ScoreSheet: React.FC<ScoreSheetProps> = ({
               left: `${tempoPos.x}px`,
               top: `${tempoPos.y}px`,
             }}
-            onMouseDown={(e) => handleScoreInfoMouseDown(e, "tempo")}
           >
             Tempo: {currentPage.tempo} BPM
           </div>
@@ -1314,7 +1325,7 @@ const ScoreSheet: React.FC<ScoreSheetProps> = ({
                   <button
                     onClick={(e) => {
                       e.stopPropagation()
-                      onRemoveNote(placedNote.id)
+                      handleNoteDeletion(placedNote.id)
                     }}
                     className="absolute -top-3 -right-3 w-6 h-6 bg-red-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition-all duration-300 flex items-center justify-center text-sm font-bold shadow-lg hover:bg-red-600"
                   >

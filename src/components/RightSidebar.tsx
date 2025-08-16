@@ -3,14 +3,15 @@
 import type React from "react"
 import { useState } from "react"
 import { Type, Settings, Volume2, VolumeX, Play, Pause, Eraser } from "lucide-react"
+import type { ScorePage } from "../hooks/useSupabase"
 
 interface RightSidebarProps {
   selectedArticulation: string | null
   onArticulationSelect: (articulation: string) => void
   isTextMode: boolean
   onTextModeToggle: (enabled: boolean) => void
-  currentPage: any
-  onUpdatePageSettings: (settings: any) => void
+  currentPage: ScorePage
+  onUpdatePageSettings: (settings: Partial<ScorePage>) => void
 }
 
 const articulations = [
@@ -55,7 +56,7 @@ const RightSidebar: React.FC<RightSidebarProps> = ({
     const bpm = currentPage?.tempo || 120
     const intervalMs = (60 / bpm) * 1000
 
-    const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)()
+    const audioContext = new (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)()
 
     const playClick = () => {
       const oscillator = audioContext.createOscillator()

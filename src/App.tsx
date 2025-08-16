@@ -1,14 +1,13 @@
 "use client"
 
-import React, { useState } from "react"
+import React, { useState, useEffect, useCallback } from "react"
 import HomePage from "./components/HomePage"
 import ProjectHeader from "./components/ProjectHeader"
-import PageTabs from "./components/PageTabs"
 import NotePalette from "./components/NotePalette"
 import ScoreSheet from "./components/ScoreSheet"
 import RightSidebar from "./components/RightSidebar"
-import { useProjectManager } from "./hooks/useProjectManager"
-import { useScoreProject } from "./hooks/useScoreProject"
+import { useSupabase, type ScorePage, type PlacedNotation } from "./hooks/useSupabase"
+import { testSupabaseConnection } from "./lib/test-connection"
 import type { Notation } from "./data/notations"
 
 export interface TextElement {
@@ -33,6 +32,7 @@ export interface ArticulationElement {
 
 function App() {
   const [currentProjectId, setCurrentProjectId] = useState<string | null>(null)
+  const [currentProject, setCurrentProject] = useState<ScorePage | null>(null)
   const [selectedNotation, setSelectedNotation] = useState<Notation | null>(null)
   const [selectedAccidental, setSelectedAccidental] = useState<string | null>(null)
   const [selectedArticulation, setSelectedArticulation] = useState<string | null>(null)
@@ -40,52 +40,70 @@ function App() {
   const [textElements, setTextElements] = useState<TextElement[]>([])
   const [articulationElements, setArticulationElements] = useState<ArticulationElement[]>([])
 
-  const { projects, createProject, deleteProject, loadProject, saveProject } = useProjectManager()
+  const { loadScorePage, saveNotes, addNote, removeNote } = useSupabase()
 
-  const {
-    project,
-    currentPage,
-    setCurrentProject,
-    updateProjectTitle,
-    addPage,
-    deletePage,
-    setCurrentPage,
-    addNoteToCurrentPage,
-    removeNoteFromCurrentPage,
-    clearCurrentPage,
-    updatePageSettings,
-  } = useScoreProject()
+  // Test Supabase connection on app startup
+  useEffect(() => {
+    testSupabaseConnection()
+  }, [])
 
-  const handleCreateProject = (title: string, composer: string, description?: string) => {
-    const projectId = createProject(title, composer, description)
-    const newProject = loadProject(projectId)
-    if (newProject) {
-      setCurrentProject(newProject)
-      setCurrentProjectId(projectId)
-    }
-  }
-
-  const handleOpenProject = (projectId: string) => {
-    const loadedProject = loadProject(projectId)
+  const handleOpenProject = useCallback(async (projectId: string) => {
+    const loadedProject = await loadScorePage(projectId)
     if (loadedProject) {
       setCurrentProject(loadedProject)
       setCurrentProjectId(projectId)
     }
-  }
+  }, [loadScorePage])
 
-  const handleBackToHome = () => {
-    if (project && currentProjectId) {
-      saveProject(project)
+  const handleBackToHome = async () => {
+    if (currentProject && currentProjectId) {
+      await saveNotes(currentProjectId, currentProject.notes)
     }
     setCurrentProjectId(null)
-    setCurrentProject(null as any)
+    setCurrentProject(null)
   }
 
-  const handleDeleteProject = (projectId: string) => {
-    deleteProject(projectId)
-    if (currentProjectId === projectId) {
-      handleBackToHome()
+  const handleAddNote = async (note: PlacedNotation) => {
+    if (currentProject && currentProjectId) {
+      const success = await addNote(currentProjectId, note)
+      if (success) {
+        setCurrentProject(prev => prev ? {
+          ...prev,
+          notes: [...prev.notes, note]
+        } : null)
+      }
     }
+  }
+
+  const handleRemoveNote = async (noteId: string) => {
+    if (currentProject && currentProjectId) {
+      const success = await removeNote(currentProjectId, noteId)
+      if (success) {
+        setCurrentProject(prev => prev ? {
+          ...prev,
+          notes: prev.notes.filter(note => note.id !== noteId)
+        } : null)
+      }
+    }
+  }
+
+  const handleClearPage = async () => {
+    if (currentProject && currentProjectId) {
+      const success = await saveNotes(currentProjectId, [])
+      if (success) {
+        setCurrentProject(prev => prev ? {
+          ...prev,
+          notes: []
+        } : null)
+      }
+    }
+  }
+
+  const handleUpdatePageSettings = (settings: Partial<ScorePage>) => {
+    setCurrentProject(prev => prev ? {
+      ...prev,
+      ...settings
+    } : null)
   }
 
   const handleAddTextElement = (textElement: TextElement) => {
@@ -108,32 +126,31 @@ function App() {
     setArticulationElements(prev => prev.filter(el => el.id !== id))
   }
 
-  React.useEffect(() => {
-    if (project && currentProjectId) {
-      saveProject(project)
-    }
-  }, [project, currentProjectId, saveProject])
+  // Auto-save notes when they change
+  useEffect(() => {
+    if (currentProject && currentProjectId) {
+      const timeoutId = setTimeout(() => {
+        saveNotes(currentProjectId, currentProject.notes)
+      }, 1000) // Debounce for 1 second
 
-  if (!currentProjectId || !project || !currentPage) {
+      return () => clearTimeout(timeoutId)
+    }
+  }, [currentProject, currentProjectId, saveNotes])
+
+  if (!currentProjectId || !currentProject) {
     return (
       <HomePage
-        projects={projects}
-        onCreateProject={handleCreateProject}
         onOpenProject={handleOpenProject}
-        onDeleteProject={handleDeleteProject}
       />
     )
   }
 
   return (
     <div className="min-h-screen bg-gray-100 flex flex-col">
-      <ProjectHeader project={project} onTitleChange={updateProjectTitle} onBackToHome={handleBackToHome} />
-      <PageTabs
-        pages={project.pages}
-        currentPageId={project.currentPageId}
-        onPageSelect={setCurrentPage}
-        onAddPage={addPage}
-        onDeletePage={deletePage}
+      <ProjectHeader 
+        project={currentProject} 
+        onTitleChange={(title) => handleUpdatePageSettings({ title })} 
+        onBackToHome={handleBackToHome} 
       />
       <div className="flex flex-1">
         <NotePalette
@@ -144,12 +161,11 @@ function App() {
         />
         <ScoreSheet
           selectedNotation={selectedNotation}
-          selectedAccidental={selectedAccidental}
-          currentPage={currentPage}
-          onAddNote={addNoteToCurrentPage}
-          onRemoveNote={removeNoteFromCurrentPage}
-          onClearPage={clearCurrentPage}
-          onUpdatePageSettings={updatePageSettings}
+          currentPage={currentProject}
+          onAddNote={handleAddNote}
+          onRemoveNote={handleRemoveNote}
+          onClearPage={handleClearPage}
+          onUpdatePageSettings={handleUpdatePageSettings}
           textElements={textElements}
           onAddTextElement={handleAddTextElement}
           onRemoveTextElement={handleRemoveTextElement}
@@ -165,8 +181,8 @@ function App() {
           onArticulationSelect={setSelectedArticulation}
           isTextMode={isTextMode}
           onTextModeToggle={setIsTextMode}
-          currentPage={currentPage}
-          onUpdatePageSettings={updatePageSettings}
+          currentPage={currentProject}
+          onUpdatePageSettings={handleUpdatePageSettings}
         />
       </div>
     </div>

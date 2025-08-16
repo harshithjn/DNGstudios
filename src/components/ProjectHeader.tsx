@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
-import { ArrowLeft, Music2, Edit3, Check, X, User, Sparkles } from 'lucide-react';
-import type { ScoreProject } from '../types/music';
+import { ArrowLeft, Music2, Edit3, Check, X, User } from 'lucide-react';
+import type { ScorePage } from '../hooks/useSupabase';
 
 interface ProjectHeaderProps {
-  project: ScoreProject;
+  project: ScorePage;
   onTitleChange: (title: string) => void;
   onBackToHome: () => void;
 }
@@ -88,10 +88,10 @@ const ProjectHeader: React.FC<ProjectHeaderProps> = ({
             <div className="flex items-center gap-6 text-sm text-gray-300">
               <div className="flex items-center gap-2">
                 <User className="w-4 h-4" />
-                <span>{project.composer}</span>
+                <span>Unknown Composer</span>
               </div>
               <span>•</span>
-              <span>{project.pages.length} page{project.pages.length !== 1 ? 's' : ''}</span>
+              <span>{project.notes.length} note{project.notes.length !== 1 ? 's' : ''}</span>
             </div>
           </div>
 

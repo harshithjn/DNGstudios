@@ -2,27 +2,15 @@
 
 import type React from "react"
 import { useState, useEffect } from "react"
-import { Plus, Music2, Calendar, User, FileText, Trash2, Edit, Search, Lock } from "lucide-react"
-
-interface ProjectSummary {
-  id: string
-  title: string
-  composer: string
-  description?: string
-  pageCount: number
-  noteCount: number
-  updatedAt: Date
-  projectType: "DNG" | "DNR" // Added projectType
-}
+import { Plus, Music2, Calendar, User, FileText, Trash2, Edit, Search, Lock, Loader2, RotateCcw } from "lucide-react"
+import { useSupabase } from "../hooks/useSupabase"
 
 interface HomePageProps {
-  projects: ProjectSummary[]
-  onCreateProject: (title: string, composer: string, description?: string, projectType?: "DNG" | "DNR") => void // Updated signature
-  onOpenProject: (projectId: string, projectType: "DNG" | "DNR") => void // Updated signature
-  onDeleteProject: (projectId: string) => void
+  onOpenProject: (projectId: string, projectType: "DNG" | "DNR") => void
 }
 
-const HomePage: React.FC<HomePageProps> = ({ projects, onCreateProject, onOpenProject, onDeleteProject }) => {
+const HomePage: React.FC<HomePageProps> = ({ onOpenProject }) => {
+  const { projects, loading, error, createProject, deleteProject } = useSupabase()
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [searchTerm, setSearchTerm] = useState("")
   const [isLoaded, setIsLoaded] = useState(false)
@@ -66,17 +54,21 @@ const HomePage: React.FC<HomePageProps> = ({ projects, onCreateProject, onOpenPr
       project.composer.toLowerCase().includes(searchTerm.toLowerCase()),
   )
 
-  const handleCreateProject = (e: React.FormEvent) => {
+  const handleCreateProject = async (e: React.FormEvent) => {
     e.preventDefault()
     if (formData.title.trim() && formData.composer.trim() && formData.projectType.trim()) {
-      onCreateProject(
+      const projectId = await createProject(
         formData.title,
         formData.composer,
         formData.description || undefined,
         formData.projectType as "DNG" | "DNR",
       )
-      setFormData({ title: "", composer: "", description: "", projectType: "" })
-      setShowCreateModal(false)
+      if (projectId) {
+        setFormData({ title: "", composer: "", description: "", projectType: "" })
+        setShowCreateModal(false)
+      } else {
+        alert("Failed to create project. Please try again.")
+      }
     } else {
       alert("Please select a project type (DNG or DNR) and fill in all required fields.")
     }
@@ -245,8 +237,34 @@ const HomePage: React.FC<HomePageProps> = ({ projects, onCreateProject, onOpenPr
           </div>
         </div>
 
+        {/* Loading State */}
+        {loading && (
+          <div className="text-center py-16">
+            <Loader2 className="w-8 h-8 animate-spin mx-auto mb-4 text-purple-600" />
+            <p className="text-gray-400">Loading projects...</p>
+          </div>
+        )}
+
+        {/* Error State */}
+        {error && !loading && (
+          <div className="text-center py-16">
+            <div className="w-16 h-16 bg-red-100 rounded-lg flex items-center justify-center mx-auto mb-4">
+              <span className="text-red-600 text-2xl">⚠️</span>
+            </div>
+            <h3 className="text-xl font-semibold text-white mb-2">Error Loading Projects</h3>
+            <p className="text-gray-400 mb-6 max-w-md mx-auto">{error}</p>
+            <button
+              onClick={() => window.location.reload()}
+              className="inline-flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors duration-200 font-medium"
+            >
+              <RotateCcw className="w-4 h-4" />
+              Retry
+            </button>
+          </div>
+        )}
+
         {/* Projects Grid */}
-        {filteredProjects.length === 0 ? (
+        {!loading && !error && filteredProjects.length === 0 ? (
           <div
             className={`text-center py-16 transition-all duration-800 delay-900 ${
               isLoaded ? "translate-y-0 opacity-100" : "translate-y-8 opacity-0"
@@ -273,7 +291,7 @@ const HomePage: React.FC<HomePageProps> = ({ projects, onCreateProject, onOpenPr
               </button>
             )}
           </div>
-        ) : (
+        ) : !loading && !error ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
             {filteredProjects.map((project, index) => (
               <div
@@ -294,10 +312,13 @@ const HomePage: React.FC<HomePageProps> = ({ projects, onCreateProject, onOpenPr
                     </div>
                   </div>
                   <button
-                    onClick={(e) => {
+                    onClick={async (e) => {
                       e.stopPropagation()
                       if (confirm("Are you sure you want to delete this project?")) {
-                        onDeleteProject(project.id)
+                        const success = await deleteProject(project.id)
+                        if (!success) {
+                          alert("Failed to delete project. Please try again.")
+                        }
                       }
                     }}
                     className="opacity-0 group-hover:opacity-100 p-1 text-gray-400 hover:text-red-400 rounded transition-all duration-200 flex-shrink-0"
@@ -346,7 +367,7 @@ const HomePage: React.FC<HomePageProps> = ({ projects, onCreateProject, onOpenPr
               </div>
             ))}
           </div>
-        )}
+        ) : null}
       </div>
 
       {/* Create Project Modal */}
