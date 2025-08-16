@@ -208,22 +208,30 @@ export const useSupabase = () => {
   const addNote = useCallback(async (
     projectId: string, 
     note: PlacedNotation
-  ): Promise<boolean> => {
+  ): Promise<PlacedNotation | null> => {
     try {
       setError(null)
       
-      const success = await notesApi.create(
+      const createdNote = await notesApi.create(
         projectId, 
         note.notation.alphabet, 
         note.x, 
         note.y
       )
       
-      return !!success
+      if (createdNote) {
+        // Return the note with the database-generated ID
+        return {
+          ...note,
+          id: createdNote.id
+        }
+      }
+      
+      return null
     } catch (err) {
       console.error('Error adding note:', err)
       setError('Failed to add note')
-      return false
+      return null
     }
   }, [])
 
@@ -235,7 +243,9 @@ export const useSupabase = () => {
     try {
       setError(null)
       
+      console.log('Attempting to delete note with ID:', noteId)
       const success = await notesApi.delete(noteId)
+      console.log('Delete result:', success)
       return success
     } catch (err) {
       console.error('Error removing note:', err)

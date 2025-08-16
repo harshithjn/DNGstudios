@@ -77,21 +77,9 @@ const KEYBOARD_LINE_Y_POSITIONS = [230, 338, 446, 553, 659, 764, 872, 980, 1087,
 const NOTE_BOUNDARY_LEFT = INITIAL_KEYBOARD_NOTE_X_POSITION
 const NOTE_BOUNDARY_RIGHT = 1000
 
-const TIME_SIGNATURE_LINE_CONFIG = {
-  X_OFFSET: -35, // Horizontal offset from calculated position
-  Y_OFFSET: 5, // Vertical offset from staff line (negative = above)
-  THICKNESS: 3, // Line thickness in pixels
-  HEIGHT: 50, // Line height in pixels
-}
 
-// Bar line configuration
-const BAR_LINE_CONFIG = {
-  THICKNESS: 2, // Line thickness in pixels
-  HEIGHT: 60, // Line height in pixels (extends above and below staff)
-  Y_OFFSET: -5, // Vertical offset from staff center
-  MEASURE_SPACING: 80, // Base spacing between measures
-  MIN_MEASURE_WIDTH: 60, // Minimum width for a measure
-}
+
+
 
 const midiNoteToNotationMap: { [key: number]: string } = {
   // a-z mapping (C3 to D5) - optimized for faster lookup
@@ -217,6 +205,9 @@ const ScoreSheet: React.FC<ScoreSheetProps> = ({
   const [keyPos, setKeyPos] = useState(currentPage.keySignaturePosition || DEFAULT_KEY_POS)
   const [tempoPos, setTempoPos] = useState(currentPage.tempoPosition || DEFAULT_TEMPO_POS)
 
+  // Calculate current keyboard line Y position
+  const currentKeyboardLineY = KEYBOARD_LINE_Y_POSITIONS[currentKeyboardLineIndex]
+
   // Sync internal positions with currentPage props if they change externally
   useEffect(() => {
     setTimeSignaturePos(currentPage.timeSignaturePosition || DEFAULT_TIME_SIGNATURE_POS)
@@ -224,7 +215,7 @@ const ScoreSheet: React.FC<ScoreSheetProps> = ({
     setTempoPos(currentPage.tempoPosition || DEFAULT_TEMPO_POS)
   }, [currentPage.timeSignaturePosition, currentPage.keySignaturePosition, currentPage.tempoPosition])
 
-  // Calculate measure boundaries and bar line positions
+  // Calculate measure boundaries and bar line positions (simplified)
   const calculateMeasures = useCallback(() => {
     const { numerator } = currentPage.timeSignature
     const notes = currentPage.notes.sort((a, b) => a.x - b.x) // Sort notes by x position
@@ -236,180 +227,56 @@ const ScoreSheet: React.FC<ScoreSheetProps> = ({
       barLineX: number
     }> = []
     
-    let currentMeasureStart = NOTE_BOUNDARY_LEFT
-    let currentMeasureNotes: PlacedNotation[] = []
-    let noteCount = 0
+    // Simple measure calculation based on fixed spacing
+    const measureWidth = 80 // Fixed measure spacing
+    const totalMeasures = Math.ceil((NOTE_BOUNDARY_RIGHT - NOTE_BOUNDARY_LEFT) / measureWidth)
     
-    // Calculate beats per measure based on time signature
-    const beatsPerMeasure = numerator
-    
-    for (const note of notes) {
-      // Check if adding this note would exceed the measure
-      if (noteCount >= beatsPerMeasure) {
-        // End current measure and start new one
-        const measureEndX = note.x - (NOTATION_KEYBOARD_X_INCREMENT / 2)
-        measures.push({
-          startX: currentMeasureStart,
-          endX: measureEndX,
-          notes: currentMeasureNotes,
-          barLineX: measureEndX
-        })
-        
-        currentMeasureStart = note.x - (NOTATION_KEYBOARD_X_INCREMENT / 2)
-        currentMeasureNotes = [note]
-        noteCount = 1
-      } else {
-        currentMeasureNotes.push(note)
-        noteCount++
-      }
-    }
-    
-    // Add the last measure
-    if (currentMeasureNotes.length > 0) {
+    for (let i = 0; i < totalMeasures; i++) {
+      const startX = NOTE_BOUNDARY_LEFT + (i * measureWidth)
+      const endX = startX + measureWidth
+      const barLineX = endX
+      
+      // Get notes in this measure
+      const measureNotes = notes.filter(note => 
+        note.x >= startX && note.x < endX
+      )
+      
       measures.push({
-        startX: currentMeasureStart,
-        endX: NOTE_BOUNDARY_RIGHT,
-        notes: currentMeasureNotes,
-        barLineX: NOTE_BOUNDARY_RIGHT
-      })
-    }
-    
-    // If no notes, create at least one empty measure
-    if (measures.length === 0) {
-      measures.push({
-        startX: NOTE_BOUNDARY_LEFT,
-        endX: NOTE_BOUNDARY_LEFT + BAR_LINE_CONFIG.MEASURE_SPACING,
-        notes: [],
-        barLineX: NOTE_BOUNDARY_LEFT + BAR_LINE_CONFIG.MEASURE_SPACING
+        startX,
+        endX,
+        notes: measureNotes,
+        barLineX
       })
     }
     
     return measures
-  }, [currentPage.notes, currentPage.timeSignature])
+  }, [currentPage.notes, currentPage.timeSignature.numerator])
 
-  // Calculate current measure and beat position
+  // Calculate current measure and beat position (simplified)
   const getCurrentMeasureInfo = useCallback(() => {
-    const measures = calculateMeasures()
-    const currentX = nextNotePosition
+    const { numerator } = currentPage.timeSignature
+    const currentY = KEYBOARD_LINE_Y_POSITIONS[currentKeyboardLineIndex]
+    const notesInCurrentLine = currentPage.notes.filter(note => 
+      Math.abs(note.y - currentY) < 10
+    ).length
     
-    for (let i = 0; i < measures.length; i++) {
-      const measure = measures[i]
-      if (currentX >= measure.startX && currentX < measure.endX) {
-        const notesInMeasure = measure.notes.length
-        return {
-          measureNumber: i + 1,
-          beatNumber: notesInMeasure + 1,
-          totalBeats: currentPage.timeSignature.numerator,
-          isMeasureFull: notesInMeasure >= currentPage.timeSignature.numerator
-        }
-      }
-    }
+    // Simple calculation based on notes in current line
+    const currentMeasure = Math.floor(notesInCurrentLine / numerator) + 1
+    const currentBeat = (notesInCurrentLine % numerator) + 1
     
     return {
-      measureNumber: measures.length + 1,
-      beatNumber: 1,
-      totalBeats: currentPage.timeSignature.numerator,
-      isMeasureFull: false
+      measureNumber: currentMeasure,
+      beatNumber: currentBeat,
+      totalBeats: numerator,
+      isMeasureFull: notesInCurrentLine % numerator === 0
     }
-  }, [calculateMeasures, nextNotePosition, currentPage.timeSignature.numerator])
+  }, [currentPage.notes, currentKeyboardLineIndex, currentPage.timeSignature.numerator])
 
-  // Calculate bar line positions
-  const calculateBarLines = useCallback(() => {
-    const measures = calculateMeasures()
-    const barLines: Array<{ x: number; isThick: boolean }> = []
-    
-    // Add bar lines for each measure
-    measures.forEach((measure, index) => {
-      barLines.push({
-        x: measure.barLineX,
-        isThick: index === 0 // First bar line is thick (start of piece)
-      })
-    })
-    
-    return barLines
-  }, [calculateMeasures])
 
-  const calculateTimeSignatureLines = useCallback(() => {
-    const { numerator } = currentPage.timeSignature
-    const lines: { x: number; y: number }[] = []
 
-    // Calculate dynamic spacing: divide available width by number of beats + 1 for proper measure divisions
-    const availableWidth = NOTE_BOUNDARY_RIGHT - NOTE_BOUNDARY_LEFT
-    const dynamicSpacing = availableWidth / (numerator + 1)
-    const numberOfLines = numerator + 1 // One line per beat plus one at the end
 
-    for (let i = 0; i < numberOfLines; i++) {
-      const x = NOTE_BOUNDARY_LEFT + i * dynamicSpacing + TIME_SIGNATURE_LINE_CONFIG.X_OFFSET
 
-      if (x <= NOTE_BOUNDARY_RIGHT) {
-        KEYBOARD_LINE_Y_POSITIONS.forEach((yPos) => {
-          lines.push({ x, y: yPos + TIME_SIGNATURE_LINE_CONFIG.Y_OFFSET })
-        })
-      }
-    }
 
-    return lines
-  }, [currentPage.timeSignature])
-
-  const renderTimeSignatureLines = () => {
-    const lines = calculateTimeSignatureLines()
-
-    return lines.map((line, index) => (
-      <div
-        key={`time-line-${index}`}
-        className="absolute bg-gray-300 opacity-40"
-        style={{
-          left: `${line.x}px`,
-          top: `${line.y + TIME_SIGNATURE_LINE_CONFIG.Y_OFFSET}px`,
-          width: `${TIME_SIGNATURE_LINE_CONFIG.THICKNESS}px`,
-          height: `${TIME_SIGNATURE_LINE_CONFIG.HEIGHT}px`,
-          zIndex: 15,
-        }}
-      />
-    ))
-  }
-
-  // Render bar lines and measures
-  const renderBarLines = () => {
-    const barLines = calculateBarLines()
-    const measures = calculateMeasures()
-
-    return (
-      <>
-        {/* Bar lines */}
-        {barLines.map((barLine, index) => (
-          <div
-            key={`bar-line-${index}`}
-            className="absolute bg-gray-800"
-            style={{
-              left: `${barLine.x}px`,
-              top: `${KEYBOARD_LINE_Y_POSITIONS[0] + BAR_LINE_CONFIG.Y_OFFSET}px`,
-              width: `${barLine.isThick ? BAR_LINE_CONFIG.THICKNESS * 2 : BAR_LINE_CONFIG.THICKNESS}px`,
-              height: `${BAR_LINE_CONFIG.HEIGHT}px`,
-              zIndex: 10,
-            }}
-          />
-        ))}
-        
-        {/* Measure numbers (optional) */}
-        {measures.map((measure, index) => (
-          <div
-            key={`measure-${index}`}
-            className="absolute text-xs text-gray-500 font-medium"
-            style={{
-              left: `${measure.startX + 5}px`,
-              top: `${KEYBOARD_LINE_Y_POSITIONS[0] - 25}px`,
-              zIndex: 15,
-            }}
-          >
-            {index + 1}
-          </div>
-        ))}
-      </>
-    )
-  }
-
-  const currentKeyboardLineY = KEYBOARD_LINE_Y_POSITIONS[currentKeyboardLineIndex]
 
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const [activeTool, setActiveTool] = useState<"none" | "pen" | "eraser">("none")
@@ -542,40 +409,47 @@ const ScoreSheet: React.FC<ScoreSheetProps> = ({
   //   }
   // }, [draggedScoreInfoId, timeSignaturePos, keyPos, tempoPos, onUpdatePageSettings])
 
-  // Helper function to handle note deletion and cursor positioning
-  const handleNoteDeletion = useCallback((noteId: string) => {
-    const noteIndex = currentPage.notes.findIndex(note => note.id === noteId)
-    if (noteIndex === -1) return
 
-    const isLastNote = noteIndex === currentPage.notes.length - 1
-    const remainingNotesCount = currentPage.notes.length - 1
-    
-    onRemoveNote(noteId)
-    
-    // Update cursor position if it was the last note
-    if (isLastNote) {
-      if (remainingNotesCount > 0) {
-        // If there are more notes, position cursor after the new last note
-        const newLastNote = currentPage.notes[remainingNotesCount - 1]
-        setNextNotePosition(newLastNote.x + NOTATION_KEYBOARD_X_INCREMENT)
-        
-        // Update keyboard line position
-        const lastNoteLineIndex = KEYBOARD_LINE_Y_POSITIONS.indexOf(newLastNote.y)
-        if (lastNoteLineIndex !== -1) {
-          setCurrentKeyboardLineIndex(lastNoteLineIndex)
-        }
-      } else {
-        // If no notes left, reset to initial position
-        setNextNotePosition(INITIAL_KEYBOARD_NOTE_X_POSITION)
-        setCurrentKeyboardLineIndex(0)
-      }
+
+  // Optimized function to delete the last note
+  const deleteLastNote = useCallback(() => {
+    console.log("deleteLastNote called, notes length:", currentPage.notes.length)
+    if (currentPage.notes.length > 0) {
+      const lastNote = currentPage.notes[currentPage.notes.length - 1]
+      console.log("Deleting note with ID:", lastNote.id, "Type:", typeof lastNote.id)
+      onRemoveNote(lastNote.id)
+    } else {
+      console.log("No notes to delete")
     }
-  }, [currentPage.notes, onRemoveNote, setNextNotePosition, setCurrentKeyboardLineIndex])
+  }, [currentPage.notes, onRemoveNote])
 
   const placeNotation = useCallback(
-    (mappedNotation: Notation) => {
-      let finalX = nextNotePosition
-      let finalY = currentKeyboardLineY
+    (mappedNotation: Notation, customX?: number, customY?: number) => {
+      let finalX = customX ?? nextNotePosition
+      let finalY = customY ?? currentKeyboardLineY
+
+      // If custom position is provided, use it directly
+      if (customX !== undefined && customY !== undefined) {
+        const newNote: PlacedNotation = {
+          id: Date.now().toString(),
+          notation: mappedNotation,
+          x: finalX,
+          y: finalY,
+          staveIndex: 0,
+          octave: 4,
+        }
+        onAddNote(newNote)
+        
+        // Update cursor position to after the placed note
+        setNextNotePosition(finalX + NOTATION_KEYBOARD_X_INCREMENT)
+        
+        // Update keyboard line position based on the placed note
+        const lineIndex = KEYBOARD_LINE_Y_POSITIONS.findIndex(y => Math.abs(y - finalY) < 10)
+        if (lineIndex !== -1) {
+          setCurrentKeyboardLineIndex(lineIndex)
+        }
+        return
+      }
 
       // Check if we need to move to the next line due to horizontal overflow
       if (finalX + NOTATION_VISUAL_WIDTH > NOTE_BOUNDARY_RIGHT) {
@@ -585,30 +459,10 @@ const ScoreSheet: React.FC<ScoreSheetProps> = ({
           finalX = NOTE_BOUNDARY_LEFT
           finalY = KEYBOARD_LINE_Y_POSITIONS[nextLineIndex]
         } else {
-          console.warn("Reached maximum number of lines (11), cannot add more notes by wrapping.")
-          return
-        }
-      }
-
-      // Check measure boundaries based on time signature
-      const measures = calculateMeasures()
-      const currentMeasure = measures.find(measure => 
-        finalX >= measure.startX && finalX < measure.endX
-      )
-
-      if (currentMeasure) {
-        const notesInCurrentMeasure = currentMeasure.notes.length
-        const { numerator } = currentPage.timeSignature
-        
-        // If current measure is full, move to next measure
-        if (notesInCurrentMeasure >= numerator) {
-          const nextMeasure = measures.find(measure => measure.startX > currentMeasure.endX)
-          if (nextMeasure) {
-            finalX = nextMeasure.startX + 20 // Add some padding from measure start
-          } else {
-            // Create a new measure if none exists
-            finalX = currentMeasure.endX + 20
-          }
+          // If no more lines, wrap back to first line
+          setCurrentKeyboardLineIndex(0)
+          finalX = NOTE_BOUNDARY_LEFT
+          finalY = KEYBOARD_LINE_Y_POSITIONS[0]
         }
       }
 
@@ -631,8 +485,6 @@ const ScoreSheet: React.FC<ScoreSheetProps> = ({
       onAddNote,
       setNextNotePosition,
       setCurrentKeyboardLineIndex,
-      calculateMeasures,
-      currentPage.timeSignature,
     ],
   )
 
@@ -655,13 +507,11 @@ const ScoreSheet: React.FC<ScoreSheetProps> = ({
       const key = event.key
       const mappedNotation = getNotationByKey(key)
 
-      if (key === "Backspace") {
+      if (key === "Backspace" || key === "Delete") {
         event.preventDefault()
         event.stopPropagation()
-        if (currentPage.notes.length > 0) {
-          const lastNote = currentPage.notes[currentPage.notes.length - 1]
-          handleNoteDeletion(lastNote.id)
-        }
+        console.log("Backspace/Delete key pressed")
+        deleteLastNote()
         return
       }
 
@@ -694,8 +544,7 @@ const ScoreSheet: React.FC<ScoreSheetProps> = ({
       showToolsDropdown,
       activeTool,
       showTextDialog,
-      currentPage.notes,
-      onRemoveNote,
+      deleteLastNote,
       placeNotation,
       setNextNotePosition,
       setCurrentKeyboardLineIndex,
@@ -781,16 +630,33 @@ const ScoreSheet: React.FC<ScoreSheetProps> = ({
       return
     }
 
-    const newNote: PlacedNotation = {
-      id: Date.now().toString(),
-      notation: selectedNotation,
-      x: Math.max(20, Math.min(x, rect.width - 20)),
-      y: Math.max(20, Math.min(y, rect.height - 20)),
-      staveIndex: 0,
-      octave: 4,
-    }
-    onAddNote(newNote)
+    // Use the improved placeNotation function with custom position
+    placeNotation(selectedNotation, x, y)
   }
+
+  // Handle mouse move to update cursor position for note placement
+  const handleNotePlacementMouseMove = useCallback((event: React.MouseEvent<HTMLDivElement>) => {
+    if (activeTool !== "none" || !selectedNotation || isTextMode || selectedArticulation || keyboardEnabled || midiEnabled) {
+      return
+    }
+
+    const rect = event.currentTarget.getBoundingClientRect()
+    const x = event.clientX - rect.left
+    const y = event.clientY - rect.top
+
+    // Constrain x position to note boundaries
+    const constrainedX = Math.max(NOTE_BOUNDARY_LEFT, Math.min(x, NOTE_BOUNDARY_RIGHT - NOTATION_VISUAL_WIDTH))
+    
+    // Update cursor position for visual feedback
+    setNextNotePosition(constrainedX)
+    
+    // Find the closest keyboard line
+    const closestLineIndex = KEYBOARD_LINE_Y_POSITIONS.reduce((closest, current, index) => {
+      return Math.abs(current - y) < Math.abs(KEYBOARD_LINE_Y_POSITIONS[closest] - y) ? index : closest
+    }, 0)
+    
+    setCurrentKeyboardLineIndex(closestLineIndex)
+  }, [activeTool, selectedNotation, isTextMode, selectedArticulation, keyboardEnabled, midiEnabled])
 
   const handleAddText = () => {
     if (!newTextContent.trim()) return
@@ -885,7 +751,7 @@ const ScoreSheet: React.FC<ScoreSheetProps> = ({
     [activeTool, eraserSize, eraseArticulationsAt],
   )
 
-  const handleMouseMove = useCallback(
+  const handleDrawingMouseMove = useCallback(
     (event: React.MouseEvent<HTMLDivElement>) => {
       if (!isInteracting.current || !canvasRef.current) return
       const rect = canvasRef.current.getBoundingClientRect()
@@ -1082,8 +948,11 @@ const ScoreSheet: React.FC<ScoreSheetProps> = ({
   useEffect(() => {
     if (currentPage.notes.length > 0) {
       const lastNote = currentPage.notes[currentPage.notes.length - 1]
-      setNextNotePosition(lastNote.x + NOTATION_KEYBOARD_X_INCREMENT)
+      const newPosition = lastNote.x + NOTATION_KEYBOARD_X_INCREMENT
       const lastNoteLineIndex = KEYBOARD_LINE_Y_POSITIONS.indexOf(lastNote.y)
+      
+      // Only update if position actually changed
+      setNextNotePosition(newPosition)
       if (lastNoteLineIndex !== -1) {
         setCurrentKeyboardLineIndex(lastNoteLineIndex)
       } else {
@@ -1093,7 +962,7 @@ const ScoreSheet: React.FC<ScoreSheetProps> = ({
       setNextNotePosition(INITIAL_KEYBOARD_NOTE_X_POSITION)
       setCurrentKeyboardLineIndex(0)
     }
-  }, [currentPage.notes, setNextNotePosition, setCurrentKeyboardLineIndex])
+  }, [currentPage.notes.length]) // Only depend on length, not the entire notes array
 
   useEffect(() => {
     if (keyboardEnabled) {
@@ -1105,23 +974,7 @@ const ScoreSheet: React.FC<ScoreSheetProps> = ({
     }
   }, [keyboardEnabled])
 
-  const renderBeatLines = () => {
-    const horizontalLines = KEYBOARD_LINE_Y_POSITIONS.map((yPos, index) => (
-      <div
-        key={`horizontal-${index}`}
-        className="absolute bg-gray-400 opacity-30"
-        style={{
-          left: `${NOTE_BOUNDARY_LEFT}px`,
-          top: `${yPos}px`,
-          width: `${NOTE_BOUNDARY_RIGHT - NOTE_BOUNDARY_LEFT}px`,
-          height: "1px",
-          zIndex: 5,
-        }}
-      />
-    ))
 
-    return horizontalLines
-  }
 
   return (
     <div
@@ -1355,6 +1208,7 @@ const ScoreSheet: React.FC<ScoreSheetProps> = ({
                 <RotateCcw className="w-3 h-3" />
                 Reset Pos
               </button>
+
             </div>
           </div>
         </div>
@@ -1362,7 +1216,8 @@ const ScoreSheet: React.FC<ScoreSheetProps> = ({
         {/* Status Banner */}
         {((keyboardEnabled || midiEnabled) && activeTool === "none") ||
           isTextMode ||
-          (selectedArticulation && (
+          selectedArticulation ||
+          (selectedNotation && !keyboardEnabled && !midiEnabled) ? (
             <div className="mb-4 bg-blue-50 border border-blue-200 rounded-lg p-3">
               <div className="flex items-center justify-between text-sm">
                 <div className="flex items-center gap-2 text-blue-800">
@@ -1370,16 +1225,19 @@ const ScoreSheet: React.FC<ScoreSheetProps> = ({
                   {midiEnabled && <Music className="w-4 h-4" />}
                   {isTextMode && <Type className="w-4 h-4" />}
                   {selectedArticulation && <span className="text-lg">♪</span>}
+                  {selectedNotation && !keyboardEnabled && !midiEnabled && <Music className="w-4 h-4" />}
                   <span className="font-medium">
                     {isTextMode
                       ? "Text Mode Active - Click anywhere to add text"
                       : selectedArticulation
                         ? `Articulation Mode Active - ${selectedArticulation}`
-                        : keyboardEnabled && midiEnabled
-                          ? "Keyboard & MIDI Modes Active - Press Backspace to delete last note"
-                          : keyboardEnabled
-                            ? "Keyboard Mode Active - Press Backspace to delete last note"
-                            : "MIDI Mode Active"}
+                        : selectedNotation && !keyboardEnabled && !midiEnabled
+                          ? "Note Placement Mode Active - Click anywhere to place notes, click on notes to delete"
+                          : keyboardEnabled && midiEnabled
+                            ? "Keyboard & MIDI Modes Active - Press Backspace/Delete to delete last note"
+                            : keyboardEnabled
+                              ? "Keyboard Mode Active - Press Backspace/Delete to delete last note"
+                              : "MIDI Mode Active"}
                   </span>
                   <span className="text-gray-500 text-sm ml-4">
                     Measure {getCurrentMeasureInfo().measureNumber}, Beat {getCurrentMeasureInfo().beatNumber}/{getCurrentMeasureInfo().totalBeats}
@@ -1387,7 +1245,7 @@ const ScoreSheet: React.FC<ScoreSheetProps> = ({
                 </div>
               </div>
             </div>
-          ))}
+          ) : null}
 
 
 
@@ -1414,11 +1272,9 @@ const ScoreSheet: React.FC<ScoreSheetProps> = ({
             }}
           />
 
-          {renderBeatLines()}
 
-          {renderBarLines()}
 
-          {renderTimeSignatureLines()}
+
 
           {/* Score Sheet Info Display with positioning */}
           <div
@@ -1460,7 +1316,10 @@ const ScoreSheet: React.FC<ScoreSheetProps> = ({
             className="absolute inset-0 z-10"
             onClick={activeTool === "none" ? handleImageClick : undefined}
             onMouseDown={handleMouseDown}
-            onMouseMove={handleMouseMove}
+            onMouseMove={(e) => {
+              handleDrawingMouseMove(e)
+              handleNotePlacementMouseMove(e)
+            }}
             onMouseUp={handleMouseUp}
             onMouseLeave={handleMouseUp}
             style={{
@@ -1488,6 +1347,10 @@ const ScoreSheet: React.FC<ScoreSheetProps> = ({
                 }}
                 onClick={(e) => {
                   e.stopPropagation()
+                  // Delete note on click if in note placement mode
+                  if (selectedNotation && activeTool === "none" && !isTextMode && !selectedArticulation && !keyboardEnabled && !midiEnabled) {
+                    onRemoveNote(placedNote.id)
+                  }
                 }}
               >
                 <div className="relative">
@@ -1499,7 +1362,8 @@ const ScoreSheet: React.FC<ScoreSheetProps> = ({
                   <button
                     onClick={(e) => {
                       e.stopPropagation()
-                      handleNoteDeletion(placedNote.id)
+                      console.log("Delete button clicked for note:", placedNote.id)
+                      onRemoveNote(placedNote.id)
                     }}
                     className="absolute -top-3 -right-3 w-6 h-6 bg-red-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition-all duration-300 flex items-center justify-center text-sm font-bold shadow-lg hover:bg-red-600"
                   >
@@ -1590,6 +1454,35 @@ const ScoreSheet: React.FC<ScoreSheetProps> = ({
                   top: `${currentKeyboardLineY}px`,
                 }}
               />
+            )}
+
+            {/* Mouse cursor indicator for note placement */}
+            {selectedNotation && activeTool === "none" && !isTextMode && !selectedArticulation && !keyboardEnabled && !midiEnabled && (
+              <div
+                className="absolute w-8 h-8 bg-blue-500 bg-opacity-30 border-2 border-blue-500 rounded-full z-20 pointer-events-none"
+                style={{
+                  left: `${nextNotePosition - 16}px`,
+                  top: `${currentKeyboardLineY - 16}px`,
+                }}
+              />
+            )}
+
+            {/* Note preview at cursor position */}
+            {selectedNotation && activeTool === "none" && !isTextMode && !selectedArticulation && !keyboardEnabled && !midiEnabled && (
+              <div
+                className="absolute z-20 pointer-events-none opacity-50"
+                style={{
+                  left: `${nextNotePosition}px`,
+                  top: `${currentKeyboardLineY}px`,
+                  transform: "translateX(-50%)",
+                }}
+              >
+                <img
+                  src={selectedNotation.image || "/placeholder.svg"}
+                  alt={selectedNotation.name || "Note"}
+                  className="w-[72px] h-[72px] object-contain"
+                />
+              </div>
             )}
           </div>
         </div>

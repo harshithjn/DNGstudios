@@ -76,11 +76,11 @@ function App() {
 
   const handleAddNote = async (note: PlacedNotation) => {
     if (currentProject && currentProjectId) {
-      const success = await addNote(currentProjectId, note)
-      if (success) {
+      const createdNote = await addNote(currentProjectId, note)
+      if (createdNote) {
         setCurrentProject(prev => prev ? {
           ...prev,
-          notes: [...prev.notes, note]
+          notes: [...prev.notes, createdNote] // Use the note with database ID
         } : null)
       }
     }
