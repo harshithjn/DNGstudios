@@ -1,54 +1,61 @@
-import React, { useState } from 'react'
-import { Lock, Music } from 'lucide-react'
+"use client"
+
+import React, { useState } from "react"
+import { Lock, Music } from "lucide-react"
 
 interface AuthProps {
   onAuthenticated: () => void
 }
 
 const Auth: React.FC<AuthProps> = ({ onAuthenticated }) => {
-  const [pin, setPin] = useState('')
-  const [error, setError] = useState('')
+  const [pin, setPin] = useState("")
+  const [error, setError] = useState("")
   const [isLoading, setIsLoading] = useState(false)
 
-  const CORRECT_PIN = '1234'
+  const CORRECT_PIN = "1234"
 
   const handlePinChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = e.target.value.replace(/\D/g, '').slice(0, 4) // Only allow digits, max 4
+    const value = e.target.value.replace(/\D/g, "").slice(0, 4)
     setPin(value)
-    setError('')
+    setError("")
   }
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
     setIsLoading(true)
-    
-    // Simulate a brief loading delay for better UX
+
     setTimeout(() => {
       if (pin === CORRECT_PIN) {
         onAuthenticated()
       } else {
-        setError('Incorrect PIN. Please try again.')
-        setPin('')
+        setError("Incorrect PIN. Please try again.")
+        setPin("")
       }
       setIsLoading(false)
     }, 300)
   }
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter') {
+    if (e.key === "Enter") {
       handleSubmit(e as React.FormEvent)
     }
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl shadow-2xl p-8 w-full max-w-md">
+    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-black to-gray-900 flex items-center justify-center p-4 relative overflow-hidden">
+      {/* Glow background circles */}
+      <div className="absolute -top-20 -left-20 w-72 h-72 bg-purple-600 rounded-full blur-[120px] opacity-40" />
+      <div className="absolute -bottom-20 -right-20 w-72 h-72 bg-blue-600 rounded-full blur-[120px] opacity-40" />
+
+      <div className="relative bg-gray-900 border border-gray-700 rounded-2xl shadow-[0_0_30px_rgba(139,92,246,0.4)] p-8 w-full max-w-md backdrop-blur-xl">
         <div className="text-center mb-8">
-          <div className="mx-auto w-16 h-16 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full flex items-center justify-center mb-4">
-            <Music className="w-8 h-8 text-white" />
+          <div className="mx-auto w-20 h-20 bg-gradient-to-r from-purple-500 to-blue-600 rounded-full flex items-center justify-center mb-4 shadow-[0_0_20px_rgba(139,92,246,0.7)]">
+            <Music className="w-10 h-10 text-white" />
           </div>
-          <h1 className="text-3xl font-bold text-gray-800 mb-2">DNG Music</h1>
-          <p className="text-gray-600">Enter your 4-digit PIN to continue</p>
+          <h1 className="text-3xl font-bold text-white mb-2 tracking-wide">
+            DNG Music
+          </h1>
+          <p className="text-gray-400">Enter your 4-digit PIN to continue</p>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-6">
@@ -60,28 +67,28 @@ const Auth: React.FC<AuthProps> = ({ onAuthenticated }) => {
                     key={index}
                     className={`w-4 h-4 rounded-full border-2 transition-all duration-200 ${
                       pin.length > index
-                        ? 'bg-blue-500 border-blue-500'
-                        : 'border-gray-300'
+                        ? "bg-purple-500 border-purple-500 shadow-[0_0_8px_rgba(168,85,247,0.9)]"
+                        : "border-gray-600"
                     }`}
                   />
                 ))}
               </div>
             </div>
-            
+
             <input
               type="password"
               value={pin}
               onChange={handlePinChange}
               onKeyPress={handleKeyPress}
-              placeholder="Enter 4-digit PIN"
-              className="w-full px-4 py-3 text-center text-2xl font-mono tracking-widest border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
+              placeholder="••••"
+              className="w-full px-4 py-3 text-center text-2xl font-mono tracking-widest bg-gray-800 text-white border border-gray-700 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent outline-none placeholder-gray-500"
               maxLength={4}
               autoFocus
             />
           </div>
 
           {error && (
-            <div className="text-red-600 text-center text-sm bg-red-50 p-3 rounded-lg">
+            <div className="text-red-400 text-center text-sm bg-red-900/30 p-3 rounded-lg border border-red-700/40">
               {error}
             </div>
           )}
@@ -91,8 +98,8 @@ const Auth: React.FC<AuthProps> = ({ onAuthenticated }) => {
             disabled={pin.length !== 4 || isLoading}
             className={`w-full py-3 px-4 rounded-lg font-medium transition-all duration-200 ${
               pin.length === 4 && !isLoading
-                ? 'bg-gradient-to-r from-blue-500 to-purple-600 text-white hover:from-blue-600 hover:to-purple-700 shadow-lg'
-                : 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                ? "bg-gradient-to-r from-purple-600 to-blue-600 text-white hover:from-purple-700 hover:to-blue-700 shadow-[0_0_20px_rgba(139,92,246,0.7)]"
+                : "bg-gray-700 text-gray-500 cursor-not-allowed"
             }`}
           >
             {isLoading ? (
@@ -108,12 +115,6 @@ const Auth: React.FC<AuthProps> = ({ onAuthenticated }) => {
             )}
           </button>
         </form>
-
-        <div className="mt-6 text-center">
-          <p className="text-xs text-gray-500">
-            Default PIN: 1234
-          </p>
-        </div>
       </div>
     </div>
   )
