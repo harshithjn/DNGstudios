@@ -91,9 +91,7 @@ export const useSupabase = () => {
 
   // Create a new project
   const createProject = useCallback(async (
-    title: string, 
-    _composer: string, 
-    _description?: string
+    title: string
   ): Promise<string | null> => {
     try {
       setError(null)

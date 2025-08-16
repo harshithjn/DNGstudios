@@ -2,21 +2,19 @@
 
 import type React from "react"
 import { useState, useEffect } from "react"
-import { Plus, Music2, Calendar, User, FileText, Trash2, Edit, Search, Lock, Loader2, RotateCcw } from "lucide-react"
+import { Plus, Music2, Calendar, User, FileText, Trash2, Edit, Search, Loader2, RotateCcw, LogOut } from "lucide-react"
 import { useSupabase } from "../hooks/useSupabase"
 
 interface HomePageProps {
   onOpenProject: (projectId: string, projectType: "DNG" | "DNR") => void
+  onLogout: () => void
 }
 
-const HomePage: React.FC<HomePageProps> = ({ onOpenProject }) => {
+const HomePage: React.FC<HomePageProps> = ({ onOpenProject, onLogout }) => {
   const { projects, loading, error, createProject, deleteProject } = useSupabase()
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [searchTerm, setSearchTerm] = useState("")
   const [isLoaded, setIsLoaded] = useState(false)
-  const [isLoggedIn, setIsLoggedIn] = useState(false)
-  const [loginData, setLoginData] = useState({ username: "", password: "" })
-  const [loginError, setLoginError] = useState("")
   const [formData, setFormData] = useState({
     title: "",
     composer: "",
@@ -25,28 +23,12 @@ const HomePage: React.FC<HomePageProps> = ({ onOpenProject }) => {
   })
 
   useEffect(() => {
-    // Check if user is already logged in
-    const loggedIn = sessionStorage.getItem("dng-logged-in")
-    if (loggedIn === "true") {
-      setIsLoggedIn(true)
-    }
-
     // 3-second entry animation
     const timer = setTimeout(() => setIsLoaded(true), 1000)
     return () => clearTimeout(timer)
   }, [])
 
-  const handleLogin = (e: React.FormEvent) => {
-    e.preventDefault()
-    if (loginData.username === "dngstudios" && loginData.password === "dngstudios123") {
-      setIsLoggedIn(true)
-      sessionStorage.setItem("dng-logged-in", "true")
-      setLoginError("")
-      setLoginData({ username: "", password: "" })
-    } else {
-      setLoginError("Invalid username or password")
-    }
-  }
+
 
   const filteredProjects = projects.filter(
     (project) =>
@@ -82,88 +64,7 @@ const HomePage: React.FC<HomePageProps> = ({ onOpenProject }) => {
     }).format(date)
   }
 
-  // Login Screen
-  if (!isLoggedIn) {
-    return (
-      <div className="min-h-screen bg-gray-950 text-white">
-        {/* Loading Animation Overlay */}
-        <div
-          className={`fixed inset-0 bg-gray-950 z-50 flex items-center justify-center transition-all duration-300 ${
-            isLoaded ? "opacity-0 pointer-events-none" : "opacity-100"
-          }`}
-        >
-          <div className="text-center">
-            <div className="w-20 h-20 bg-purple-600 rounded-lg flex items-center justify-center mx-auto mb-6">
-              <Music2 className="w-10 h-10 text-white animate-pulse" />
-            </div>
-            <div className="text-3xl font-bold text-white mb-2">DNG Studios</div>
-            <div className="text-sm text-gray-400">Professional Music Notation</div>
-            <div className="mt-6 w-48 h-1 bg-gray-800 rounded-full mx-auto overflow-hidden">
-              <div className="h-full bg-purple-600 rounded-full animate-pulse" style={{ width: "100%" }}></div>
-            </div>
-          </div>
-        </div>
 
-        {/* Login Form */}
-        <div
-          className={`flex items-center justify-center min-h-screen transition-all duration-800 delay-500 ${
-            isLoaded ? "translate-y-0 opacity-100" : "translate-y-8 opacity-0"
-          }`}
-        >
-          <div className="bg-gray-900 rounded-lg border border-gray-700 p-8 w-full max-w-md">
-            <div className="text-center mb-8">
-              <div className="w-16 h-16 bg-purple-600 rounded-lg flex items-center justify-center mx-auto mb-4">
-                <Lock className="w-8 h-8 text-white" />
-              </div>
-              <h1 className="text-2xl font-bold text-white mb-2">Welcome to DNG Studios</h1>
-              <p className="text-gray-400">Please sign in to continue</p>
-            </div>
-
-            <form onSubmit={handleLogin} className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-1">Username</label>
-                <input
-                  type="text"
-                  value={loginData.username}
-                  onChange={(e) => setLoginData({ ...loginData, username: e.target.value })}
-                  className="w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded-lg focus:ring-1 focus:ring-purple-500 focus:border-purple-500 transition-all duration-200 text-white placeholder-gray-400"
-                  placeholder="Enter username"
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-1">Password</label>
-                <input
-                  type="password"
-                  value={loginData.password}
-                  onChange={(e) => setLoginData({ ...loginData, password: e.target.value })}
-                  className="w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded-lg focus:ring-1 focus:ring-purple-500 focus:border-purple-500 transition-all duration-200 text-white placeholder-gray-400"
-                  placeholder="Enter password"
-                  required
-                />
-              </div>
-
-              {loginError && (
-                <div className="text-red-400 text-sm text-center bg-red-900/20 border border-red-800 rounded-lg p-2">
-                  {loginError}
-                </div>
-              )}
-
-              <button
-                type="submit"
-                className="w-full px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors duration-200 font-medium"
-              >
-                Sign In
-              </button>
-            </form>
-
-            <div className="mt-6 text-center text-xs text-gray-500">Professional Music Notation Software</div>
-          </div>
-        </div>
-      </div>
-    )
-  }
 
   // Main Application (existing code)
   return (
@@ -203,13 +104,22 @@ const HomePage: React.FC<HomePageProps> = ({ onOpenProject }) => {
                 <p className="text-xs text-gray-400">Professional Music Notation</p>
               </div>
             </div>
-            <button
-              onClick={() => setShowCreateModal(true)}
-              className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors duration-200 text-sm font-medium"
-            >
-              <Plus className="w-4 h-4" />
-              New Project
-            </button>
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => setShowCreateModal(true)}
+                className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors duration-200 text-sm font-medium"
+              >
+                <Plus className="w-4 h-4" />
+                New Project
+              </button>
+              <button
+                onClick={onLogout}
+                className="flex items-center gap-2 px-3 py-2 text-gray-300 hover:text-white hover:bg-gray-700 rounded-lg transition-all duration-300"
+              >
+                <LogOut className="w-4 h-4" />
+                <span className="text-sm font-medium">Logout</span>
+              </button>
+            </div>
           </div>
         </div>
       </div>

@@ -6,6 +6,7 @@ import ProjectHeader from "./components/ProjectHeader"
 import NotePalette from "./components/NotePalette"
 import ScoreSheet from "./components/ScoreSheet"
 import RightSidebar from "./components/RightSidebar"
+import Auth from "./components/Auth"
 import { useSupabase, type ScorePage, type PlacedNotation } from "./hooks/useSupabase"
 import { testSupabaseConnection } from "./lib/test-connection"
 import type { Notation } from "./data/notations"
@@ -33,6 +34,7 @@ export interface ArticulationElement {
 function App() {
   const [currentProjectId, setCurrentProjectId] = useState<string | null>(null)
   const [currentProject, setCurrentProject] = useState<ScorePage | null>(null)
+  const [isAuthenticated, setIsAuthenticated] = useState(false)
   const [selectedNotation, setSelectedNotation] = useState<Notation | null>(null)
   const [selectedAccidental, setSelectedAccidental] = useState<string | null>(null)
   const [selectedArticulation, setSelectedArticulation] = useState<string | null>(null)
@@ -45,6 +47,15 @@ function App() {
   // Test Supabase connection on app startup
   useEffect(() => {
     testSupabaseConnection()
+  }, [])
+
+  // Handle authentication
+  const handleAuthenticated = useCallback(() => {
+    setIsAuthenticated(true)
+  }, [])
+
+  const handleLogout = useCallback(() => {
+    setIsAuthenticated(false)
   }, [])
 
   const handleOpenProject = useCallback(async (projectId: string) => {
@@ -137,10 +148,16 @@ function App() {
     }
   }, [currentProject, currentProjectId, saveNotes])
 
+  // Show authentication screen if not authenticated
+  if (!isAuthenticated) {
+    return <Auth onAuthenticated={handleAuthenticated} />
+  }
+
   if (!currentProjectId || !currentProject) {
     return (
       <HomePage
         onOpenProject={handleOpenProject}
+        onLogout={handleLogout}
       />
     )
   }
@@ -151,6 +168,7 @@ function App() {
         project={currentProject} 
         onTitleChange={(title) => handleUpdatePageSettings({ title })} 
         onBackToHome={handleBackToHome} 
+        onLogout={handleLogout}
       />
       <div className="flex flex-1">
         <NotePalette

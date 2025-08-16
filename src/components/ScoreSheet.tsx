@@ -84,6 +84,15 @@ const TIME_SIGNATURE_LINE_CONFIG = {
   HEIGHT: 50, // Line height in pixels
 }
 
+// Bar line configuration
+const BAR_LINE_CONFIG = {
+  THICKNESS: 2, // Line thickness in pixels
+  HEIGHT: 60, // Line height in pixels (extends above and below staff)
+  Y_OFFSET: -5, // Vertical offset from staff center
+  MEASURE_SPACING: 80, // Base spacing between measures
+  MIN_MEASURE_WIDTH: 60, // Minimum width for a measure
+}
+
 const midiNoteToNotationMap: { [key: number]: string } = {
   // a-z mapping (C3 to D5) - optimized for faster lookup
   48: "a",
@@ -146,12 +155,13 @@ const KEY_SIGNATURE_OPTIONS = [
 ]
 
 const TIME_SIGNATURE_OPTIONS = [
-  { label: "2/3", numerator: 2, denominator: 3 },
+  { label: "2/4", numerator: 2, denominator: 4 },
   { label: "3/4", numerator: 3, denominator: 4 },
-  { label: "3/8", numerator: 3, denominator: 8 },
-  { label: "5/8", numerator: 5, denominator: 8 },
   { label: "4/4", numerator: 4, denominator: 4 },
-  { label: "3/3", numerator: 3, denominator: 3 },
+  { label: "6/8", numerator: 6, denominator: 8 },
+  { label: "3/8", numerator: 3, denominator: 8 },
+  { label: "5/4", numerator: 5, denominator: 4 },
+  { label: "7/8", numerator: 7, denominator: 8 },
 ]
 
 // Define default positions for score info elements
@@ -193,7 +203,7 @@ const ScoreSheet: React.FC<ScoreSheetProps> = ({
   const [newTextBold, setNewTextBold] = useState(false)
   const [newTextItalic, setNewTextItalic] = useState(false)
   const [newTextUnderline, setNewTextUnderline] = useState(false)
-  const [showDeleteFeedback, setShowDeleteFeedback] = useState(false)
+
 
   const midiTimeoutRef = useRef<{ [key: number]: number }>({})
 
@@ -213,6 +223,111 @@ const ScoreSheet: React.FC<ScoreSheetProps> = ({
     setKeyPos(currentPage.keySignaturePosition || DEFAULT_KEY_POS)
     setTempoPos(currentPage.tempoPosition || DEFAULT_TEMPO_POS)
   }, [currentPage.timeSignaturePosition, currentPage.keySignaturePosition, currentPage.tempoPosition])
+
+  // Calculate measure boundaries and bar line positions
+  const calculateMeasures = useCallback(() => {
+    const { numerator } = currentPage.timeSignature
+    const notes = currentPage.notes.sort((a, b) => a.x - b.x) // Sort notes by x position
+    
+    const measures: Array<{
+      startX: number
+      endX: number
+      notes: PlacedNotation[]
+      barLineX: number
+    }> = []
+    
+    let currentMeasureStart = NOTE_BOUNDARY_LEFT
+    let currentMeasureNotes: PlacedNotation[] = []
+    let noteCount = 0
+    
+    // Calculate beats per measure based on time signature
+    const beatsPerMeasure = numerator
+    
+    for (const note of notes) {
+      // Check if adding this note would exceed the measure
+      if (noteCount >= beatsPerMeasure) {
+        // End current measure and start new one
+        const measureEndX = note.x - (NOTATION_KEYBOARD_X_INCREMENT / 2)
+        measures.push({
+          startX: currentMeasureStart,
+          endX: measureEndX,
+          notes: currentMeasureNotes,
+          barLineX: measureEndX
+        })
+        
+        currentMeasureStart = note.x - (NOTATION_KEYBOARD_X_INCREMENT / 2)
+        currentMeasureNotes = [note]
+        noteCount = 1
+      } else {
+        currentMeasureNotes.push(note)
+        noteCount++
+      }
+    }
+    
+    // Add the last measure
+    if (currentMeasureNotes.length > 0) {
+      measures.push({
+        startX: currentMeasureStart,
+        endX: NOTE_BOUNDARY_RIGHT,
+        notes: currentMeasureNotes,
+        barLineX: NOTE_BOUNDARY_RIGHT
+      })
+    }
+    
+    // If no notes, create at least one empty measure
+    if (measures.length === 0) {
+      measures.push({
+        startX: NOTE_BOUNDARY_LEFT,
+        endX: NOTE_BOUNDARY_LEFT + BAR_LINE_CONFIG.MEASURE_SPACING,
+        notes: [],
+        barLineX: NOTE_BOUNDARY_LEFT + BAR_LINE_CONFIG.MEASURE_SPACING
+      })
+    }
+    
+    return measures
+  }, [currentPage.notes, currentPage.timeSignature])
+
+  // Calculate current measure and beat position
+  const getCurrentMeasureInfo = useCallback(() => {
+    const measures = calculateMeasures()
+    const currentX = nextNotePosition
+    
+    for (let i = 0; i < measures.length; i++) {
+      const measure = measures[i]
+      if (currentX >= measure.startX && currentX < measure.endX) {
+        const notesInMeasure = measure.notes.length
+        return {
+          measureNumber: i + 1,
+          beatNumber: notesInMeasure + 1,
+          totalBeats: currentPage.timeSignature.numerator,
+          isMeasureFull: notesInMeasure >= currentPage.timeSignature.numerator
+        }
+      }
+    }
+    
+    return {
+      measureNumber: measures.length + 1,
+      beatNumber: 1,
+      totalBeats: currentPage.timeSignature.numerator,
+      isMeasureFull: false
+    }
+  }, [calculateMeasures, nextNotePosition, currentPage.timeSignature.numerator])
+
+  // Calculate bar line positions
+  const calculateBarLines = useCallback(() => {
+    const measures = calculateMeasures()
+    const barLines: Array<{ x: number; isThick: boolean }> = []
+    
+    // Add bar lines for each measure
+    measures.forEach((measure, index) => {
+      barLines.push({
+        x: measure.barLineX,
+        isThick: index === 0 // First bar line is thick (start of piece)
+      })
+    })
+    
+    return barLines
+  }, [calculateMeasures])
 
   const calculateTimeSignatureLines = useCallback(() => {
     const { numerator } = currentPage.timeSignature
@@ -252,6 +367,46 @@ const ScoreSheet: React.FC<ScoreSheetProps> = ({
         }}
       />
     ))
+  }
+
+  // Render bar lines and measures
+  const renderBarLines = () => {
+    const barLines = calculateBarLines()
+    const measures = calculateMeasures()
+
+    return (
+      <>
+        {/* Bar lines */}
+        {barLines.map((barLine, index) => (
+          <div
+            key={`bar-line-${index}`}
+            className="absolute bg-gray-800"
+            style={{
+              left: `${barLine.x}px`,
+              top: `${KEYBOARD_LINE_Y_POSITIONS[0] + BAR_LINE_CONFIG.Y_OFFSET}px`,
+              width: `${barLine.isThick ? BAR_LINE_CONFIG.THICKNESS * 2 : BAR_LINE_CONFIG.THICKNESS}px`,
+              height: `${BAR_LINE_CONFIG.HEIGHT}px`,
+              zIndex: 10,
+            }}
+          />
+        ))}
+        
+        {/* Measure numbers (optional) */}
+        {measures.map((measure, index) => (
+          <div
+            key={`measure-${index}`}
+            className="absolute text-xs text-gray-500 font-medium"
+            style={{
+              left: `${measure.startX + 5}px`,
+              top: `${KEYBOARD_LINE_Y_POSITIONS[0] - 25}px`,
+              zIndex: 15,
+            }}
+          >
+            {index + 1}
+          </div>
+        ))}
+      </>
+    )
   }
 
   const currentKeyboardLineY = KEYBOARD_LINE_Y_POSITIONS[currentKeyboardLineIndex]
@@ -397,10 +552,6 @@ const ScoreSheet: React.FC<ScoreSheetProps> = ({
     
     onRemoveNote(noteId)
     
-    // Show delete feedback
-    setShowDeleteFeedback(true)
-    setTimeout(() => setShowDeleteFeedback(false), 1000)
-    
     // Update cursor position if it was the last note
     if (isLastNote) {
       if (remainingNotesCount > 0) {
@@ -426,6 +577,7 @@ const ScoreSheet: React.FC<ScoreSheetProps> = ({
       let finalX = nextNotePosition
       let finalY = currentKeyboardLineY
 
+      // Check if we need to move to the next line due to horizontal overflow
       if (finalX + NOTATION_VISUAL_WIDTH > NOTE_BOUNDARY_RIGHT) {
         const nextLineIndex = currentKeyboardLineIndex + 1
         if (nextLineIndex < KEYBOARD_LINE_Y_POSITIONS.length) {
@@ -435,6 +587,28 @@ const ScoreSheet: React.FC<ScoreSheetProps> = ({
         } else {
           console.warn("Reached maximum number of lines (11), cannot add more notes by wrapping.")
           return
+        }
+      }
+
+      // Check measure boundaries based on time signature
+      const measures = calculateMeasures()
+      const currentMeasure = measures.find(measure => 
+        finalX >= measure.startX && finalX < measure.endX
+      )
+
+      if (currentMeasure) {
+        const notesInCurrentMeasure = currentMeasure.notes.length
+        const { numerator } = currentPage.timeSignature
+        
+        // If current measure is full, move to next measure
+        if (notesInCurrentMeasure >= numerator) {
+          const nextMeasure = measures.find(measure => measure.startX > currentMeasure.endX)
+          if (nextMeasure) {
+            finalX = nextMeasure.startX + 20 // Add some padding from measure start
+          } else {
+            // Create a new measure if none exists
+            finalX = currentMeasure.endX + 20
+          }
         }
       }
 
@@ -457,6 +631,8 @@ const ScoreSheet: React.FC<ScoreSheetProps> = ({
       onAddNote,
       setNextNotePosition,
       setCurrentKeyboardLineIndex,
+      calculateMeasures,
+      currentPage.timeSignature,
     ],
   )
 
@@ -983,6 +1159,7 @@ const ScoreSheet: React.FC<ScoreSheetProps> = ({
                       MIDI {midiEnabled ? "ON" : "OFF"}
                     </span>
                   </div>
+
                 </div>
               </div>
             </div>
@@ -1204,20 +1381,15 @@ const ScoreSheet: React.FC<ScoreSheetProps> = ({
                             ? "Keyboard Mode Active - Press Backspace to delete last note"
                             : "MIDI Mode Active"}
                   </span>
+                  <span className="text-gray-500 text-sm ml-4">
+                    Measure {getCurrentMeasureInfo().measureNumber}, Beat {getCurrentMeasureInfo().beatNumber}/{getCurrentMeasureInfo().totalBeats}
+                  </span>
                 </div>
               </div>
             </div>
           ))}
 
-        {/* Delete Feedback */}
-        {showDeleteFeedback && (
-          <div className="mb-4 bg-red-50 border border-red-200 rounded-lg p-3 animate-pulse">
-            <div className="flex items-center gap-2 text-red-800 text-sm">
-              <Trash2 className="w-4 h-4" />
-              <span className="font-medium">Note deleted!</span>
-            </div>
-          </div>
-        )}
+
 
         {/* Score Sheet Area */}
         <div
@@ -1243,6 +1415,8 @@ const ScoreSheet: React.FC<ScoreSheetProps> = ({
           />
 
           {renderBeatLines()}
+
+          {renderBarLines()}
 
           {renderTimeSignatureLines()}
 

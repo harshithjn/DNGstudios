@@ -1,17 +1,19 @@
 import React, { useState } from 'react';
-import { ArrowLeft, Music2, Edit3, Check, X, User } from 'lucide-react';
+import { ArrowLeft, Music2, Edit3, Check, X, User, LogOut } from 'lucide-react';
 import type { ScorePage } from '../hooks/useSupabase';
 
 interface ProjectHeaderProps {
   project: ScorePage;
   onTitleChange: (title: string) => void;
   onBackToHome: () => void;
+  onLogout: () => void;
 }
 
 const ProjectHeader: React.FC<ProjectHeaderProps> = ({
   project,
   onTitleChange,
   onBackToHome,
+  onLogout,
 }) => {
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [tempTitle, setTempTitle] = useState(project.title);
@@ -96,6 +98,13 @@ const ProjectHeader: React.FC<ProjectHeaderProps> = ({
           </div>
 
           <div className="flex items-center gap-4">
+            <button
+              onClick={onLogout}
+              className="flex items-center gap-2 px-3 py-2 text-gray-300 hover:text-white hover:bg-gray-700 rounded-lg transition-all duration-300"
+            >
+              <LogOut className="w-4 h-4" />
+              <span className="text-sm font-medium">Logout</span>
+            </button>
             <div className="text-sm text-gray-400 bg-gray-800 px-4 py-2 rounded-lg border border-gray-700">
               DNG Studios
             </div>
