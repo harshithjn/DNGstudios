@@ -22,6 +22,8 @@ export interface PlacedNote {
 export interface ScorePage {
   id: string
   title: string
+  composer?: string
+  projectType?: "DNG" | "DNR"
   notes: PlacedNote[]
   timeSignature: {
     numerator: number

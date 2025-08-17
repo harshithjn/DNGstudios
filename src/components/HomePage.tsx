@@ -142,10 +142,61 @@ const HomePage: React.FC<HomePageProps> = ({ onOpenProject, onLogout }) => {
               className="pl-10 pr-4 py-2 bg-gray-900 border border-gray-700 rounded-lg focus:ring-1 focus:ring-purple-500 focus:border-purple-500 transition-all duration-200 w-80 text-white placeholder-gray-400"
             />
           </div>
-          <div className="text-sm text-gray-400 bg-gray-800 px-3 py-1 rounded-full">
-            {projects.length} project{projects.length !== 1 ? "s" : ""}
+          <div className="flex items-center gap-4">
+            <div className="text-sm text-gray-400 bg-gray-800 px-3 py-1 rounded-full">
+              {projects.length} project{projects.length !== 1 ? "s" : ""}
+            </div>
+            <div className="text-sm text-gray-400 bg-gray-800 px-3 py-1 rounded-full">
+              {projects.filter(p => p.projectType === 'DNG').length} DNG
+            </div>
+            <div className="text-sm text-gray-400 bg-gray-800 px-3 py-1 rounded-full">
+              {projects.filter(p => p.projectType === 'DNR').length} DNR
+            </div>
           </div>
         </div>
+
+        {/* Quick Stats */}
+        {projects.length > 0 && (
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+            <div className="bg-gray-900 rounded-lg border border-gray-800 p-4">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-purple-600 rounded-lg flex items-center justify-center">
+                  <Music2 className="w-5 h-5 text-white" />
+                </div>
+                <div>
+                  <p className="text-sm text-gray-400">Total Projects</p>
+                  <p className="text-2xl font-bold text-white">{projects.length}</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-gray-900 rounded-lg border border-gray-800 p-4">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-green-600 rounded-lg flex items-center justify-center">
+                  <User className="w-5 h-5 text-white" />
+                </div>
+                <div>
+                  <p className="text-sm text-gray-400">Unique Composers</p>
+                  <p className="text-2xl font-bold text-white">{new Set(projects.map(p => p.composer)).size}</p>
+                </div>
+              </div>
+            </div>
+            <div className="bg-gray-900 rounded-lg border border-gray-800 p-4">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-orange-600 rounded-lg flex items-center justify-center">
+                  <Calendar className="w-5 h-5 text-white" />
+                </div>
+                <div>
+                  <p className="text-sm text-gray-400">Recent Activity</p>
+                  <p className="text-2xl font-bold text-white">{projects.filter(p => {
+                    const daysSinceUpdate = (Date.now() - p.updatedAt.getTime()) / (1000 * 60 * 60 * 24)
+                    return daysSinceUpdate <= 7
+                  }).length}</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Loading State */}
         {loading && (
@@ -173,7 +224,70 @@ const HomePage: React.FC<HomePageProps> = ({ onOpenProject, onLogout }) => {
           </div>
         )}
 
-        {/* Projects Grid */}
+        {/* Recent Projects Section */}
+        {!loading && !error && projects.length > 0 && (
+          <div className="mb-8">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-semibold text-white">Recent Projects</h2>
+              <button
+                onClick={() => setShowCreateModal(true)}
+                className="text-sm text-purple-400 hover:text-purple-300 transition-colors duration-200"
+              >
+                View All
+              </button>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {projects
+                .sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime())
+                .slice(0, 3)
+                .map((project, index) => (
+                  <div
+                    key={project.id}
+                    className={`bg-gray-900 rounded-lg border border-gray-800 p-4 hover:bg-gray-850 hover:border-gray-700 transition-all duration-200 group cursor-pointer ${
+                      isLoaded ? "translate-y-0 opacity-100" : "translate-y-8 opacity-0"
+                    }`}
+                    style={{
+                      transitionDelay: `${900 + index * 100}ms`,
+                    }}
+                    onClick={() => onOpenProject(project.id, project.projectType || 'DNG')}
+                  >
+                    <div className="flex items-start justify-between mb-3">
+                      <div className="flex-1 min-w-0">
+                        <h3 className="text-base font-medium text-white mb-1 truncate">{project.title}</h3>
+                        <div className="flex items-center gap-1 text-xs text-gray-400 mb-2">
+                          <User className="w-3 h-3 flex-shrink-0" />
+                          <span className="truncate">{project.composer}</span>
+                        </div>
+                      </div>
+                      <span
+                        className={`px-2 py-0.5 rounded-full text-xs font-medium ${
+                          project.projectType === "DNG" ? "bg-purple-600 text-white" : "bg-blue-600 text-white"
+                        }`}
+                      >
+                        {project.projectType}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-4 text-xs text-gray-500 mb-3">
+                      <div className="flex items-center gap-1">
+                        <FileText className="w-3 h-3" />
+                        <span>{project.pageCount}</span>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <Music2 className="w-3 h-3" />
+                        <span>{project.noteCount}</span>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-1 text-xs text-gray-500">
+                      <Calendar className="w-3 h-3" />
+                      <span>{formatDate(project.updatedAt)}</span>
+                    </div>
+                  </div>
+                ))}
+            </div>
+          </div>
+        )}
+
+        {/* All Projects Grid */}
         {!loading && !error && filteredProjects.length === 0 ? (
           <div
             className={`text-center py-16 transition-all duration-800 delay-900 ${
@@ -268,7 +382,7 @@ const HomePage: React.FC<HomePageProps> = ({ onOpenProject, onLogout }) => {
                 </div>
 
                 <button
-                  onClick={() => onOpenProject(project.id, project.projectType)} // Pass projectType
+                  onClick={() => onOpenProject(project.id, project.projectType || 'DNG')} // Pass projectType
                   className="w-full flex items-center justify-center gap-2 px-3 py-2 bg-gray-800 text-white rounded-lg hover:bg-purple-600 transition-colors duration-200 text-sm"
                 >
                   <Edit className="w-4 h-4" />

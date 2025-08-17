@@ -1,12 +1,15 @@
 import React, { useState } from 'react';
 import { ArrowLeft, Music2, Edit3, Check, X, User, LogOut } from 'lucide-react';
 import type { ScorePage } from '../hooks/useSupabase';
+import ModeSelector, { type ScoreMode } from './ModeSelector';
 
 interface ProjectHeaderProps {
   project: ScorePage;
   onTitleChange: (title: string) => void;
   onBackToHome: () => void;
   onLogout: () => void;
+  scoreMode: ScoreMode;
+  onScoreModeChange: (mode: ScoreMode) => void;
 }
 
 const ProjectHeader: React.FC<ProjectHeaderProps> = ({
@@ -14,6 +17,8 @@ const ProjectHeader: React.FC<ProjectHeaderProps> = ({
   onTitleChange,
   onBackToHome,
   onLogout,
+  scoreMode,
+  onScoreModeChange,
 }) => {
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [tempTitle, setTempTitle] = useState(project.title);
@@ -90,14 +95,24 @@ const ProjectHeader: React.FC<ProjectHeaderProps> = ({
             <div className="flex items-center gap-6 text-sm text-gray-300">
               <div className="flex items-center gap-2">
                 <User className="w-4 h-4" />
-                <span>Unknown Composer</span>
+                <span>{project.composer || 'Unknown Composer'}</span>
               </div>
               <span>•</span>
               <span>{project.notes.length} note{project.notes.length !== 1 ? 's' : ''}</span>
+              <span>•</span>
+              <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                project.projectType === 'DNR' ? 'bg-blue-600 text-white' : 'bg-purple-600 text-white'
+              }`}>
+                {project.projectType || 'DNG'}
+              </span>
             </div>
           </div>
 
           <div className="flex items-center gap-4">
+            <ModeSelector 
+              currentMode={scoreMode} 
+              onModeChange={onScoreModeChange} 
+            />
             <button
               onClick={onLogout}
               className="flex items-center gap-2 px-3 py-2 text-gray-300 hover:text-white hover:bg-gray-700 rounded-lg transition-all duration-300"

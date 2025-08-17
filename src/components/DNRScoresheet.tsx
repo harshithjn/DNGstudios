@@ -21,7 +21,6 @@ import html2canvas from "html2canvas"
 import jsPDF from "jspdf"
 import type { TextElement, ArticulationElement } from "../App"
 import PianoComponent from "./Piano"
-import type { ScoreMode } from "./ModeSelector"
 
 interface PlacedNotation {
   id: string
@@ -45,29 +44,28 @@ interface ScorePage {
   timeSignaturePosition?: { x: number; y: number }
 }
 
-interface ScoreSheetProps {
+interface DNRScoresheetProps {
   selectedNotation: Notation | null
   currentPage: ScorePage
   onAddNote: (note: PlacedNotation) => void
   onRemoveNote: (noteId: string) => void
   onUpdateNote: (noteId: string, updates: Partial<PlacedNotation>) => void
-  onClearPage: () => void
-  onUpdatePageSettings: (settings: Partial<ScorePage>) => void
+  onClearPage?: () => void
+  onUpdatePageSettings?: (settings: Partial<ScorePage>) => void
   textElements: TextElement[]
-  onAddTextElement: (textElement: TextElement) => void
+  onAddTextElement?: (textElement: TextElement) => void
   onRemoveTextElement: (id: string) => void
-  onUpdateTextElement: (id: string, updates: Partial<TextElement>) => void
+  onUpdateTextElement?: (id: string, updates: Partial<TextElement>) => void
   articulationElements: ArticulationElement[]
-  onAddArticulation: (articulation: ArticulationElement) => void
+  onAddArticulation?: (articulation: ArticulationElement) => void
   onRemoveArticulation: (id: string) => void
-  onUpdateArticulation: (id: string, updates: Partial<ArticulationElement>) => void
+  onUpdateArticulation?: (id: string, updates: Partial<ArticulationElement>) => void
   selectedArticulation: string | null
   isTextMode: boolean
-  canUndo: boolean
-  canRedo: boolean
-  onUndo: () => void
-  onRedo: () => void
-  scoreMode: ScoreMode
+  canUndo?: boolean
+  canRedo?: boolean
+  onUndo?: () => void
+  onRedo?: () => void
 }
 
 const A4_WIDTH_PX = 794
@@ -83,62 +81,15 @@ const KEYBOARD_LINE_Y_POSITIONS = [230, 338, 446, 553, 659, 764, 872, 980, 1087,
 const NOTE_BOUNDARY_LEFT = INITIAL_KEYBOARD_NOTE_X_POSITION
 const NOTE_BOUNDARY_RIGHT = 1000
 
-
-
-
-
 const midiNoteToNotationMap: { [key: number]: string } = {
   // a-z mapping (C3 to D5) - optimized for faster lookup
-  48: "a",
-  49: "b",
-  50: "c",
-  51: "d",
-  52: "e",
-  53: "f",
-  54: "g",
-  55: "h",
-  56: "i",
-  57: "j",
-  58: "k",
-  59: "l",
-  60: "m",
-  61: "n",
-  62: "o",
-  63: "p",
-  64: "q",
-  65: "r",
-  66: "s",
-  67: "t",
-  68: "u",
-  69: "v",
-  70: "w",
-  71: "x",
-  72: "y",
-  73: "z",
+  48: "a", 49: "b", 50: "c", 51: "d", 52: "e", 53: "f", 54: "g", 55: "h", 56: "i", 57: "j",
+  58: "k", 59: "l", 60: "m", 61: "n", 62: "o", 63: "p", 64: "q", 65: "r", 66: "s", 67: "t",
+  68: "u", 69: "v", 70: "w", 71: "x", 72: "y", 73: "z",
   // A-S mapping (D#5 to A#6) - extended range for better coverage
-  74: "A",
-  75: "B",
-  76: "C",
-  77: "D",
-  78: "E",
-  79: "F",
-  80: "G",
-  81: "H",
-  82: "I",
-  83: "J",
-  84: "K",
-  85: "L",
-  86: "M",
-  87: "N",
-  88: "O",
-  89: "P",
-  90: "Q",
-  91: "R",
-  92: "S",
+  74: "A", 75: "B", 76: "C", 77: "D", 78: "E", 79: "F", 80: "G", 81: "H", 82: "I", 83: "J",
+  84: "K", 85: "L", 86: "M", 87: "N", 88: "O", 89: "P", 90: "Q", 91: "R", 92: "S",
 }
-
-// const MIDI_DEBOUNCE_TIME = 10 // ms - prevent duplicate rapid-fire notes
-// const MAX_SIMULTANEOUS_NOTES = 10 // Limit for performance stability
 
 const KEY_SIGNATURE_OPTIONS = [
   { label: "C Major / A Minor", value: "C" },
@@ -163,7 +114,7 @@ const DEFAULT_TIME_SIGNATURE_POS = { x: 150, y: 120 }
 const DEFAULT_KEY_POS = { x: 150, y: 160 }
 const DEFAULT_TEMPO_POS = { x: 150, y: 190 }
 
-const ScoreSheet: React.FC<ScoreSheetProps> = ({
+const DNRScoresheet: React.FC<DNRScoresheetProps> = ({
   selectedNotation,
   currentPage,
   onAddNote,
@@ -185,7 +136,6 @@ const ScoreSheet: React.FC<ScoreSheetProps> = ({
   canRedo,
   onUndo,
   onRedo,
-  scoreMode,
 }) => {
   const [showSettingsDropdown, setShowSettingsDropdown] = useState(false)
   const [showToolsDropdown, setShowToolsDropdown] = useState(false)
@@ -203,66 +153,24 @@ const ScoreSheet: React.FC<ScoreSheetProps> = ({
   const [newTextBold, setNewTextBold] = useState(false)
   const [newTextItalic, setNewTextItalic] = useState(false)
   const [newTextUnderline, setNewTextUnderline] = useState(false)
+  const [activeTool, setActiveTool] = useState<"none" | "pen" | "eraser">("none")
+  const [drawingLines, setDrawingLines] = useState<Array<{ x: number; y: number }[]>>([])
+  const [eraserSize] = useState(20)
 
+  // Drag state for notes
+  const [draggedNoteId, setDraggedNoteId] = useState<string | null>(null)
+  const [noteDragOffset, setNoteDragOffset] = useState({ x: 0, y: 0 })
+  const [isDraggingNote, setIsDraggingNote] = useState(false)
+  const [selectedNoteId, setSelectedNoteId] = useState<string | null>(null)
 
-  const midiTimeoutRef = useRef<{ [key: number]: number }>({})
-
-  // const [lastMidiTime, setLastMidiTime] = useState<{ [key: number]: number }>({})
-  // const [activeMidiNotes, setActiveMidiNotes] = useState<Set<number>>(new Set())
-
-  // Moved useState calls inside the component and initialized from currentPage or defaults
+  // Score info positions
   const [timeSignaturePos, setTimeSignaturePos] = useState(
     currentPage.timeSignaturePosition || DEFAULT_TIME_SIGNATURE_POS,
   )
   const [keyPos, setKeyPos] = useState(currentPage.keySignaturePosition || DEFAULT_KEY_POS)
   const [tempoPos, setTempoPos] = useState(currentPage.tempoPosition || DEFAULT_TEMPO_POS)
 
-  // Calculate current keyboard line Y position
-  const currentKeyboardLineY = KEYBOARD_LINE_Y_POSITIONS[currentKeyboardLineIndex]
-
-  // Sync internal positions with currentPage props if they change externally
-  useEffect(() => {
-    setTimeSignaturePos(currentPage.timeSignaturePosition || DEFAULT_TIME_SIGNATURE_POS)
-    setKeyPos(currentPage.keySignaturePosition || DEFAULT_KEY_POS)
-    setTempoPos(currentPage.tempoPosition || DEFAULT_TEMPO_POS)
-  }, [currentPage.timeSignaturePosition, currentPage.keySignaturePosition, currentPage.tempoPosition])
-
-
-
-  // Calculate current measure and beat position (simplified)
-  const getCurrentMeasureInfo = useCallback(() => {
-    const { numerator } = currentPage.timeSignature
-    const currentY = KEYBOARD_LINE_Y_POSITIONS[currentKeyboardLineIndex]
-    const notesInCurrentLine = currentPage.notes.filter(note => 
-      Math.abs(note.y - currentY) < 10
-    ).length
-    
-    // Simple calculation based on notes in current line
-    const currentMeasure = Math.floor(notesInCurrentLine / numerator) + 1
-    const currentBeat = (notesInCurrentLine % numerator) + 1
-    
-    return {
-      measureNumber: currentMeasure,
-      beatNumber: currentBeat,
-      totalBeats: numerator,
-      isMeasureFull: notesInCurrentLine % numerator === 0
-    }
-  }, [currentPage.notes, currentKeyboardLineIndex, currentPage.timeSignature])
-
-
-
-
-
-
-
-  const canvasRef = useRef<HTMLCanvasElement>(null)
-  const [activeTool, setActiveTool] = useState<"none" | "pen" | "eraser">("none")
-  const isInteracting = useRef(false)
-  const currentLine = useRef<Array<{ x: number; y: number }>>([])
-  const [drawingLines, setDrawingLines] = useState<Array<{ x: number; y: number }[]>>([])
-  const [eraserSize] = useState(20)
-
-  // Add drag state for text elements
+  // Drag state for text elements
   const [draggedTextId, setDraggedTextId] = useState<string | null>(null)
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 })
 
@@ -273,13 +181,13 @@ const ScoreSheet: React.FC<ScoreSheetProps> = ({
   const [resizeStartY, setResizeStartY] = useState(0)
   const [resizeStartHeight, setResizeStartHeight] = useState(0)
 
-  // Drag state for notes
-  const [draggedNoteId, setDraggedNoteId] = useState<string | null>(null)
-  const [noteDragOffset, setNoteDragOffset] = useState({ x: 0, y: 0 })
-  const [isDraggingNote, setIsDraggingNote] = useState(false)
-  const [selectedNoteId, setSelectedNoteId] = useState<string | null>(null)
+  const canvasRef = useRef<HTMLCanvasElement>(null)
+  const isInteracting = useRef(false)
+  const currentLine = useRef<Array<{ x: number; y: number }>>([])
+  const midiTimeoutRef = useRef<{ [key: number]: number }>({})
 
-
+  // Calculate current keyboard line Y position
+  const currentKeyboardLineY = KEYBOARD_LINE_Y_POSITIONS[currentKeyboardLineIndex]
 
   // Keep ScoreSheet in sync with RightSidebar eraser (and future tools) via custom event
   useEffect(() => {
@@ -298,7 +206,7 @@ const ScoreSheet: React.FC<ScoreSheetProps> = ({
       e.preventDefault()
       e.stopPropagation()
       const textElement = textElements.find((t) => t.id === textId)
-      if (!textElement) return
+      if (!textElement || !onUpdateTextElement) return
 
       setDraggedTextId(textId)
       setDragOffset({
@@ -311,15 +219,19 @@ const ScoreSheet: React.FC<ScoreSheetProps> = ({
 
   const handleTextMouseMove = useCallback(
     (e: React.MouseEvent) => {
-      if (!draggedTextId) return
+      if (!draggedTextId || !onUpdateTextElement) return
       e.preventDefault()
 
       const newX = e.clientX - dragOffset.x
       const newY = e.clientY - dragOffset.y
 
-      onUpdateTextElement(draggedTextId, { x: newX, y: newY })
+      try {
+        onUpdateTextElement(draggedTextId, { x: newX, y: newY })
+      } catch (error) {
+        console.warn('onUpdateTextElement not available:', error)
+      }
     },
-    [draggedTextId, dragOffset, onUpdateTextElement],
+    [draggedTextId, dragOffset],
   )
 
   const handleTextMouseUp = useCallback(() => {
@@ -332,7 +244,7 @@ const ScoreSheet: React.FC<ScoreSheetProps> = ({
       e.preventDefault()
       e.stopPropagation()
       const art = articulationElements.find((a) => a.id === articulationId)
-      if (!art) return
+      if (!art || !onUpdateArticulation) return
 
       setDraggedArticulationId(articulationId)
       setArticulationDragOffset({
@@ -340,7 +252,7 @@ const ScoreSheet: React.FC<ScoreSheetProps> = ({
         y: e.clientY - art.y,
       })
     },
-    [articulationElements],
+    [articulationElements, onUpdateArticulation],
   )
 
   const handleArticulationResizeMouseDown = useCallback(
@@ -348,30 +260,38 @@ const ScoreSheet: React.FC<ScoreSheetProps> = ({
       e.preventDefault()
       e.stopPropagation()
       const art = articulationElements.find((a) => a.id === articulationId)
-      if (!art) return
+      if (!art || !onUpdateArticulation) return
 
       setResizingArticulationId(articulationId)
       setResizeStartY(e.clientY)
       setResizeStartHeight(art.height || 100)
     },
-    [articulationElements],
+    [articulationElements, onUpdateArticulation],
   )
 
   const handleArticulationMouseMove = useCallback(
     (e: React.MouseEvent) => {
-      if (!draggedArticulationId && !resizingArticulationId) return
+      if ((!draggedArticulationId && !resizingArticulationId) || !onUpdateArticulation) return
       e.preventDefault()
       
       if (draggedArticulationId) {
         const newX = e.clientX - articulationDragOffset.x
         const newY = e.clientY - articulationDragOffset.y
-        onUpdateArticulation?.(draggedArticulationId, { x: newX, y: newY })
+        try {
+          onUpdateArticulation(draggedArticulationId, { x: newX, y: newY })
+        } catch (error) {
+          console.warn('onUpdateArticulation not available:', error)
+        }
       }
       
       if (resizingArticulationId) {
         const deltaY = e.clientY - resizeStartY
         const newHeight = Math.max(20, resizeStartHeight + deltaY)
-        onUpdateArticulation?.(resizingArticulationId, { height: newHeight })
+        try {
+          onUpdateArticulation(resizingArticulationId, { height: newHeight })
+        } catch (error) {
+          console.warn('onUpdateArticulation not available:', error)
+        }
       }
     },
     [draggedArticulationId, articulationDragOffset, onUpdateArticulation, resizingArticulationId, resizeStartY, resizeStartHeight],
@@ -438,44 +358,6 @@ const ScoreSheet: React.FC<ScoreSheetProps> = ({
     setIsDraggingNote(false)
     // Don't clear selectedNoteId here - keep it selected after dragging
   }, [])
-
-
-
-  // const handleScoreInfoMouseMove = useCallback(
-  //   (e: React.MouseEvent) => {
-  //     if (!draggedScoreInfoId) return
-  //     e.preventDefault()
-  //
-  //     const newX = e.clientX - scoreInfoDragOffset.x
-  //     const newY = e.clientY - scoreInfoDragOffset.y
-  //
-  //     if (draggedScoreInfoId === "timeSignature") {
-  //       setTimeSignaturePos({ x: newX, y: newY })
-  //     } else if (draggedScoreInfoId === "key") {
-  //       setKeyPos({ x: newX, y: newY })
-  //     } else {
-  //       // tempo
-  //       setTempoPos({ x: newX, y: newY })
-  //     }
-  //   },
-  //   [draggedScoreInfoId, scoreInfoDragOffset],
-  // )
-
-  // const handleScoreInfoMouseUp = useCallback(() => {
-  //   if (!draggedScoreInfoId) return
-  //
-  //   // Persist the new positions to currentPage
-  //   if (draggedScoreInfoId === "timeSignature") {
-  //     onUpdatePageSettings({ timeSignaturePosition: timeSignaturePos })
-  //   } else if (draggedScoreInfoId === "key") {
-  //     onUpdatePageSettings({ keySignaturePosition: keyPos })
-  //   } else {
-  //     // tempo
-  //     onUpdatePageSettings({ tempoPosition: tempoPos })
-  //   }
-  // }, [draggedScoreInfoId, timeSignaturePos, keyPos, tempoPos, onUpdatePageSettings])
-
-
 
   // Optimized function to delete the last note
   const deleteLastNote = useCallback(() => {
@@ -684,7 +566,7 @@ const ScoreSheet: React.FC<ScoreSheetProps> = ({
 
       const articulation = articulations.find((a) => a.id === selectedArticulation) || 
                           barLines.find((a) => a.id === selectedArticulation)
-      if (articulation) {
+      if (articulation && onAddArticulation) {
         const newArticulation: ArticulationElement = {
           id: Date.now().toString(),
           type: articulation.id,
@@ -695,7 +577,11 @@ const ScoreSheet: React.FC<ScoreSheetProps> = ({
           height: articulation.isExtensible ? 100 : undefined, // Default height for extensible elements
           isExtensible: articulation.isExtensible || false,
         }
-        onAddArticulation(newArticulation)
+        try {
+          onAddArticulation(newArticulation)
+        } catch (error) {
+          console.warn('onAddArticulation not available:', error)
+        }
       }
       return
     }
@@ -708,32 +594,8 @@ const ScoreSheet: React.FC<ScoreSheetProps> = ({
     placeNotation(selectedNotation, x, y)
   }
 
-  // Handle mouse move to update cursor position for note placement
-  const handleNotePlacementMouseMove = useCallback((event: React.MouseEvent<HTMLDivElement>) => {
-    if (activeTool !== "none" || !selectedNotation || isTextMode || selectedArticulation || keyboardEnabled || midiEnabled) {
-      return
-    }
-
-    const rect = event.currentTarget.getBoundingClientRect()
-    const x = event.clientX - rect.left
-    const y = event.clientY - rect.top
-
-    // Constrain x position to note boundaries
-    const constrainedX = Math.max(NOTE_BOUNDARY_LEFT, Math.min(x, NOTE_BOUNDARY_RIGHT - NOTATION_VISUAL_WIDTH))
-    
-    // Update cursor position for visual feedback
-    setNextNotePosition(constrainedX)
-    
-    // Find the closest keyboard line
-    const closestLineIndex = KEYBOARD_LINE_Y_POSITIONS.reduce((closest, current, index) => {
-      return Math.abs(current - y) < Math.abs(KEYBOARD_LINE_Y_POSITIONS[closest] - y) ? index : closest
-    }, 0)
-    
-    setCurrentKeyboardLineIndex(closestLineIndex)
-  }, [activeTool, selectedNotation, isTextMode, selectedArticulation, keyboardEnabled, midiEnabled])
-
   const handleAddText = () => {
-    if (!newTextContent.trim()) return
+    if (!newTextContent.trim() || !onAddTextElement) return
 
     const newTextElement: TextElement = {
       id: Date.now().toString(),
@@ -746,13 +608,17 @@ const ScoreSheet: React.FC<ScoreSheetProps> = ({
       underline: newTextUnderline,
     }
 
-    onAddTextElement(newTextElement)
-    setShowTextDialog(false)
-    setNewTextContent("")
-    setNewTextSize(16)
-    setNewTextBold(false)
-    setNewTextItalic(false)
-    setNewTextUnderline(false)
+    try {
+      onAddTextElement(newTextElement)
+      setShowTextDialog(false)
+      setNewTextContent("")
+      setNewTextSize(16)
+      setNewTextBold(false)
+      setNewTextItalic(false)
+      setNewTextUnderline(false)
+    } catch (error) {
+      console.warn('onAddTextElement not available:', error)
+    }
   }
 
   const drawLine = useCallback((ctx: CanvasRenderingContext2D, line: { x: number; y: number }[]) => {
@@ -865,7 +731,8 @@ const ScoreSheet: React.FC<ScoreSheetProps> = ({
   }, [activeTool])
 
   const handleClearAll = () => {
-    onClearPage()
+    // Clear all notes
+    currentPage.notes.forEach(note => onRemoveNote(note.id))
     setDrawingLines([])
     const canvas = canvasRef.current
     if (canvas) {
@@ -877,7 +744,7 @@ const ScoreSheet: React.FC<ScoreSheetProps> = ({
   }
 
   const exportToPDF = async () => {
-    const scoresheetElement = document.querySelector(".scoresheet-area") as HTMLElement
+    const scoresheetElement = document.querySelector(".dnr-scoresheet-area") as HTMLElement
     if (!scoresheetElement) return
 
     try {
@@ -902,7 +769,7 @@ const ScoreSheet: React.FC<ScoreSheetProps> = ({
       })
 
       pdf.addImage(imgData, "PNG", 0, 0, imgWidthMm, imgHeightMm)
-      pdf.save(`${currentPage.title}.pdf`)
+      pdf.save(`${currentPage.title}_DNR.pdf`)
     } catch (error) {
       console.error("Error exporting to PDF:", error)
     }
@@ -991,8 +858,6 @@ const ScoreSheet: React.FC<ScoreSheetProps> = ({
           clearTimeout(timeout)
         })
         midiTimeoutRef.current = {}
-        // setActiveMidiNotes(new Set())
-        // setLastMidiTime({})
       }
     } else {
       // Cleanup when MIDI is disabled
@@ -1003,8 +868,6 @@ const ScoreSheet: React.FC<ScoreSheetProps> = ({
         clearTimeout(timeout)
       })
       midiTimeoutRef.current = {}
-      // setActiveMidiNotes(new Set())
-      // setLastMidiTime({})
       setMidiInputs([])
     }
   }, [midiEnabled, handleMidiMessage])
@@ -1051,25 +914,15 @@ const ScoreSheet: React.FC<ScoreSheetProps> = ({
     }
   }, [keyboardEnabled])
 
-
-
   return (
-    <div
-      className="flex-1 bg-gray-100 overflow-auto"
-      onClick={() => {
-        if (keyboardEnabled && activeTool === "none") {
-          document.body.focus()
-        }
-      }}
-      tabIndex={keyboardEnabled && activeTool === "none" ? 0 : -1}
-    >
+    <div className="flex-1 bg-gray-100 overflow-auto">
       <div className="max-w-7xl mx-auto p-8">
         {/* Compact Header */}
         <div className="bg-white rounded-xl shadow-lg border border-gray-200 mb-6">
           <div className="flex items-center justify-between p-4">
             <div className="flex items-center gap-6">
               <div>
-                <h2 className="text-xl font-bold text-gray-800 mb-1">{currentPage.title}</h2>
+                <h2 className="text-xl font-bold text-gray-800 mb-1">{currentPage.title} - DNR Mode</h2>
                 <div className="flex items-center gap-4 text-sm text-gray-600">
                   <div className="flex items-center gap-1">
                     <Music className="w-3 h-3" />
@@ -1089,7 +942,6 @@ const ScoreSheet: React.FC<ScoreSheetProps> = ({
                       MIDI {midiEnabled ? "ON" : "OFF"}
                     </span>
                   </div>
-
                 </div>
               </div>
             </div>
@@ -1118,7 +970,7 @@ const ScoreSheet: React.FC<ScoreSheetProps> = ({
                             name="keySignature"
                             value={option.value}
                             checked={currentPage.keySignature === option.value}
-                            onChange={() => onUpdatePageSettings({ keySignature: option.value })}
+                            onChange={() => onUpdatePageSettings?.({ keySignature: option.value })}
                             className="form-radio h-4 w-4 text-purple-600"
                           />
                           {option.label}
@@ -1144,7 +996,7 @@ const ScoreSheet: React.FC<ScoreSheetProps> = ({
                               currentPage.timeSignature.denominator === option.denominator
                             }
                             onChange={() =>
-                              onUpdatePageSettings({
+                              onUpdatePageSettings?.({
                                 timeSignature: { numerator: option.numerator, denominator: option.denominator },
                               })
                             }
@@ -1165,7 +1017,7 @@ const ScoreSheet: React.FC<ScoreSheetProps> = ({
                         max={240}
                         step={1}
                         value={currentPage.tempo}
-                        onChange={(e) => onUpdatePageSettings({ tempo: Number(e.target.value) })}
+                        onChange={(e) => onUpdatePageSettings?.({ tempo: Number(e.target.value) })}
                         className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-purple-600"
                       />
                     </div>
@@ -1173,7 +1025,7 @@ const ScoreSheet: React.FC<ScoreSheetProps> = ({
                 )}
               </div>
 
-              {/* Tools Dropdown (optional, still kept) */}
+              {/* Tools Dropdown */}
               <div className="relative">
                 <button
                   onClick={() => setShowToolsDropdown(!showToolsDropdown)}
@@ -1307,7 +1159,6 @@ const ScoreSheet: React.FC<ScoreSheetProps> = ({
                   Redo
                 </button>
               </div>
-
             </div>
           </div>
         </div>
@@ -1317,16 +1168,16 @@ const ScoreSheet: React.FC<ScoreSheetProps> = ({
           isTextMode ||
           selectedArticulation ||
           (selectedNotation && !keyboardEnabled && !midiEnabled) ? (
-            <div className="mb-4 bg-blue-50 border border-blue-200 rounded-lg p-3">
+            <div className="mb-4 bg-purple-50 border border-purple-200 rounded-lg p-3">
               <div className="flex items-center justify-between text-sm">
-                <div className="flex items-center gap-2 text-blue-800">
+                <div className="flex items-center gap-2 text-purple-800">
                   {keyboardEnabled && <Keyboard className="w-4 h-4" />}
                   {midiEnabled && <Music className="w-4 h-4" />}
                   {isTextMode && <Type className="w-4 h-4" />}
                   {selectedArticulation && <span className="text-lg">♪</span>}
                   {selectedNotation && !keyboardEnabled && !midiEnabled && <Music className="w-4 h-4" />}
                   <span className="font-medium">
-                    {scoreMode === 'dnr' ? '[DNR Mode] ' : ''}
+                    [DNR Mode]{" "}
                     {isTextMode
                       ? "Text Mode Active - Click anywhere to add text"
                       : selectedArticulation
@@ -1339,22 +1190,14 @@ const ScoreSheet: React.FC<ScoreSheetProps> = ({
                               ? "Keyboard Mode Active - Press Backspace/Delete to delete last note, click notes to select and drag"
                               : "MIDI Mode Active - Click notes to select and drag"}
                   </span>
-                  <span className="text-gray-500 text-sm ml-4">
-                    Measure {getCurrentMeasureInfo().measureNumber}, Beat {getCurrentMeasureInfo().beatNumber}/{getCurrentMeasureInfo().totalBeats}
-                    <span className="ml-4 text-xs">
-                      Ctrl+Z: Undo | Ctrl+Y: Redo
-                    </span>
-                  </span>
                 </div>
               </div>
             </div>
           ) : null}
 
-
-
-        {/* Score Sheet Area */}
+        {/* DNR Score Sheet Area */}
         <div
-          className="relative bg-white shadow-xl mx-auto scoresheet-area"
+          className="relative bg-white shadow-xl mx-auto dnr-scoresheet-area"
           style={{
             width: `${RENDERED_SCORESHEET_WIDTH}px`,
             height: `${RENDERED_SCORESHEET_HEIGHT}px`,
@@ -1365,12 +1208,16 @@ const ScoreSheet: React.FC<ScoreSheetProps> = ({
             if (e.target === e.currentTarget) {
               setSelectedNoteId(null)
             }
+            if (keyboardEnabled && activeTool === "none") {
+              document.body.focus()
+            }
           }}
+          tabIndex={keyboardEnabled && activeTool === "none" ? 0 : -1}
         >
-          {/* Background Image */}
+          {/* DNR Background Image */}
           <img
-            src={scoreMode === 'dnr' ? "images/dnr-background.jpg" : "images/DNGLines.jpg"}
-            alt={`${scoreMode === 'dnr' ? 'DNR' : 'Music'} Scoresheet Background`}
+            src="images/dnr-background.jpg"
+            alt="DNR Scoresheet Background"
             style={{
               position: "absolute",
               top: 0,
@@ -1380,10 +1227,6 @@ const ScoreSheet: React.FC<ScoreSheetProps> = ({
               objectFit: "cover",
             }}
           />
-
-
-
-
 
           {/* Score Sheet Info Display with positioning */}
           <div
@@ -1427,10 +1270,9 @@ const ScoreSheet: React.FC<ScoreSheetProps> = ({
             onMouseDown={handleMouseDown}
             onMouseMove={(e) => {
               handleDrawingMouseMove(e)
-              handleNotePlacementMouseMove(e)
               handleNoteMouseMove(e)
-              handleTextMouseMove(e)
-              handleArticulationMouseMove(e)
+              if (onUpdateTextElement) handleTextMouseMove(e)
+              if (onUpdateArticulation) handleArticulationMouseMove(e)
             }}
             onMouseUp={() => {
               handleMouseUp()
@@ -1457,7 +1299,7 @@ const ScoreSheet: React.FC<ScoreSheetProps> = ({
               style={{ pointerEvents: "none" }}
             />
 
-            {/* Placed notations */}
+            {/* Placed notations (images) */}
             {currentPage.notes.map((placedNote) => (
               <div
                 key={placedNote.id}
@@ -1488,7 +1330,7 @@ const ScoreSheet: React.FC<ScoreSheetProps> = ({
                 <div className="relative">
                   <img
                     src={placedNote.notation?.image || "/placeholder.svg"}
-                    alt={placedNote.notation?.name || "Note"}
+                    alt={placedNote.notation?.name || "Image"}
                     className={`w-[72px] h-[72px] object-contain transition-all duration-200 ${
                       draggedNoteId === placedNote.id 
                         ? 'drop-shadow-2xl scale-105' 
@@ -1499,7 +1341,7 @@ const ScoreSheet: React.FC<ScoreSheetProps> = ({
                   />
                   {/* Drag indicator - only show when selected */}
                   {selectedNoteId === placedNote.id && (
-                    <div className="absolute -top-2 -left-2 w-4 h-4 bg-blue-500 text-white rounded-full opacity-100 transition-all duration-300 flex items-center justify-center text-xs font-bold shadow-lg">
+                    <div className="absolute -top-2 -left-2 w-4 h-4 bg-purple-500 text-white rounded-full opacity-100 transition-all duration-300 flex items-center justify-center text-xs font-bold shadow-lg">
                       ⋮⋮
                     </div>
                   )}
@@ -1535,9 +1377,9 @@ const ScoreSheet: React.FC<ScoreSheetProps> = ({
                   textDecoration: textElement.underline ? "underline" : "none",
                   cursor: draggedTextId === textElement.id ? "grabbing" : "grab",
                 }}
-                onMouseDown={(e) => handleTextMouseDown(e, textElement.id)}
-                onMouseMove={handleTextMouseMove}
-                onMouseUp={handleTextMouseUp}
+                onMouseDown={onUpdateTextElement ? (e) => handleTextMouseDown(e, textElement.id) : undefined}
+                onMouseMove={onUpdateTextElement ? handleTextMouseMove : undefined}
+                onMouseUp={onUpdateTextElement ? handleTextMouseUp : undefined}
               >
                 <div className="relative">
                   <span className="text-gray-800 pointer-events-none">{textElement.text}</span>
@@ -1571,9 +1413,9 @@ const ScoreSheet: React.FC<ScoreSheetProps> = ({
                   transform: "translateX(-50%)",
                   cursor: draggedArticulationId === articulation.id ? "grabbing" : "grab",
                 }}
-                onMouseDown={(e) => handleArticulationMouseDown(e, articulation.id)}
-                onMouseMove={handleArticulationMouseMove}
-                onMouseUp={handleArticulationMouseUp}
+                onMouseDown={onUpdateArticulation ? (e) => handleArticulationMouseDown(e, articulation.id) : undefined}
+                onMouseMove={onUpdateArticulation ? handleArticulationMouseMove : undefined}
+                onMouseUp={onUpdateArticulation ? handleArticulationMouseUp : undefined}
                 onClick={(e) => {
                   e.stopPropagation()
                 }}
@@ -1615,7 +1457,7 @@ const ScoreSheet: React.FC<ScoreSheetProps> = ({
                   {articulation.isExtensible && (
                     <div
                       className="absolute -bottom-2 left-1/2 transform -translate-x-1/2 w-4 h-2 bg-blue-500 rounded cursor-ns-resize opacity-0 group-hover:opacity-100 transition-all duration-300 hover:bg-blue-600"
-                      onMouseDown={(e) => handleArticulationResizeMouseDown(e, articulation.id)}
+                      onMouseDown={onUpdateArticulation ? (e) => handleArticulationResizeMouseDown(e, articulation.id) : undefined}
                       title="Resize bar line"
                     />
                   )}
@@ -1626,7 +1468,7 @@ const ScoreSheet: React.FC<ScoreSheetProps> = ({
             {/* Next note position indicator */}
             {(keyboardEnabled || midiEnabled) && activeTool === "none" && !isTextMode && !selectedArticulation && (
               <div
-                className="absolute w-px h-6 bg-blue-400 opacity-100 animate-pulse z-20 translate-y-1/2"
+                className="absolute w-px h-6 bg-purple-400 opacity-100 animate-pulse z-20 translate-y-1/2"
                 style={{
                   left: `${nextNotePosition}px`,
                   top: `${currentKeyboardLineY}px`,
@@ -1637,7 +1479,7 @@ const ScoreSheet: React.FC<ScoreSheetProps> = ({
             {/* Mouse cursor indicator for note placement */}
             {selectedNotation && activeTool === "none" && !isTextMode && !selectedArticulation && !keyboardEnabled && !midiEnabled && (
               <div
-                className="absolute w-8 h-8 bg-blue-500 bg-opacity-30 border-2 border-blue-500 rounded-full z-20 pointer-events-none"
+                className="absolute w-8 h-8 bg-purple-500 bg-opacity-30 border-2 border-purple-500 rounded-full z-20 pointer-events-none"
                 style={{
                   left: `${nextNotePosition - 16}px`,
                   top: `${currentKeyboardLineY - 16}px`,
@@ -1691,7 +1533,7 @@ const ScoreSheet: React.FC<ScoreSheetProps> = ({
                     value={newTextContent}
                     onChange={(e) => setNewTextContent(e.target.value)}
                     placeholder="Enter your text here..."
-                    className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
+                    className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent resize-none"
                     rows={3}
                     autoFocus
                   />
@@ -1705,7 +1547,7 @@ const ScoreSheet: React.FC<ScoreSheetProps> = ({
                     max="48"
                     value={newTextSize}
                     onChange={(e) => setNewTextSize(Number(e.target.value))}
-                    className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
+                    className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-purple-600"
                   />
                 </div>
 
@@ -1716,7 +1558,7 @@ const ScoreSheet: React.FC<ScoreSheetProps> = ({
                       onClick={() => setNewTextBold(!newTextBold)}
                       className={`flex items-center gap-1 px-3 py-2 rounded-lg border transition-all duration-200 ${
                         newTextBold
-                          ? "border-blue-500 bg-blue-50 text-blue-700"
+                          ? "border-purple-500 bg-purple-50 text-purple-700"
                           : "border-gray-300 hover:border-gray-400"
                       }`}
                     >
@@ -1727,7 +1569,7 @@ const ScoreSheet: React.FC<ScoreSheetProps> = ({
                       onClick={() => setNewTextItalic(!newTextItalic)}
                       className={`flex items-center gap-1 px-3 py-2 rounded-lg border transition-all duration-200 ${
                         newTextItalic
-                          ? "border-blue-500 bg-blue-50 text-blue-700"
+                          ? "border-purple-500 bg-purple-50 text-purple-700"
                           : "border-gray-300 hover:border-gray-400"
                       }`}
                     >
@@ -1738,7 +1580,7 @@ const ScoreSheet: React.FC<ScoreSheetProps> = ({
                       onClick={() => setNewTextUnderline(!newTextUnderline)}
                       className={`flex items-center gap-1 px-3 py-2 rounded-lg border transition-all duration-200 ${
                         newTextUnderline
-                          ? "border-blue-500 bg-blue-50 text-blue-700"
+                          ? "border-purple-500 bg-purple-50 text-purple-700"
                           : "border-gray-300 hover:border-gray-400"
                       }`}
                     >
@@ -1752,7 +1594,7 @@ const ScoreSheet: React.FC<ScoreSheetProps> = ({
                   <button
                     onClick={handleAddText}
                     disabled={!newTextContent.trim()}
-                    className="flex-1 bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed font-medium"
+                    className="flex-1 bg-purple-600 text-white py-2 px-4 rounded-lg hover:bg-purple-700 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed font-medium"
                   >
                     Add Text
                   </button>
@@ -1808,9 +1650,9 @@ const ScoreSheet: React.FC<ScoreSheetProps> = ({
                   </div>
                 ))}
               </div>
-              <div className="bg-blue-50 rounded-lg p-4 border border-blue-200">
-                <h3 className="font-semibold text-blue-900 mb-2">Instructions:</h3>
-                <ul className="text-sm text-blue-800 space-y-1">
+              <div className="bg-purple-50 rounded-lg p-4 border border-purple-200">
+                <h3 className="font-semibold text-purple-900 mb-2">Instructions:</h3>
+                <ul className="text-sm text-purple-800 space-y-1">
                   <li>• Press any mapped key to place the corresponding notation on the sheet</li>
                   <li>
                     • <kbd className="px-1 py-0.5 bg-gray-800 text-white rounded font-mono text-xs">a-z</kbd> keys place
@@ -1833,8 +1675,8 @@ const ScoreSheet: React.FC<ScoreSheetProps> = ({
                     delete the last placed notation
                   </li>
                 </ul>
-                <h3 className="font-semibold text-blue-900 mt-4 mb-2">Enhanced MIDI Mapping (a-z then A-S):</h3>
-                <div className="grid grid-cols-2 gap-4 text-sm text-blue-800">
+                <h3 className="font-semibold text-purple-900 mt-4 mb-2">Enhanced MIDI Mapping (a-z then A-S):</h3>
+                <div className="grid grid-cols-2 gap-4 text-sm text-purple-800">
                   <div>
                     <h4 className="font-medium mb-1">a-z keys (MIDI notes 48-73):</h4>
                     <ul className="space-y-1">
@@ -1883,4 +1725,4 @@ const ScoreSheet: React.FC<ScoreSheetProps> = ({
   )
 }
 
-export default ScoreSheet
+export default DNRScoresheet

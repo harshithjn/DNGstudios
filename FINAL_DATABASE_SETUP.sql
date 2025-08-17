@@ -5,10 +5,13 @@
 DROP TABLE IF EXISTS notes CASCADE;
 DROP TABLE IF EXISTS note_pages CASCADE;
 
--- Step 1: Create note_pages table
+-- Step 1: Create note_pages table with all required fields
 CREATE TABLE note_pages (
     id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
     title TEXT NOT NULL,
+    composer TEXT DEFAULT 'Unknown Composer',
+    description TEXT,
+    project_type TEXT DEFAULT 'DNG' CHECK (project_type IN ('DNG', 'DNR')),
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
@@ -38,11 +41,11 @@ CREATE POLICY "Allow all operations on note_pages" ON note_pages
 CREATE POLICY "Allow all operations on notes" ON notes
     FOR ALL USING (true);
 
--- Step 6: Insert sample data
-INSERT INTO note_pages (title) VALUES 
-    ('Sample Composition 1'),
-    ('Sample Composition 2'),
-    ('My First Score');
+-- Step 6: Insert sample data with all fields
+INSERT INTO note_pages (title, composer, description, project_type) VALUES 
+    ('Sample Composition 1', 'John Doe', 'A beautiful classical piece', 'DNG'),
+    ('Sample Composition 2', 'Jane Smith', 'Modern jazz fusion', 'DNR'),
+    ('My First Score', 'Unknown Composer', 'Learning composition', 'DNG');
 
 -- Step 7: Insert sample notes for the first page
 INSERT INTO notes (page_id, symbol, position_x, position_y)

@@ -57,24 +57,24 @@ export const useSupabase = () => {
             return {
               id: page.id,
               title: page.title,
-              composer: 'Unknown Composer', // You can add composer field to note_pages table if needed
-              description: undefined,
+              composer: page.composer || 'Unknown Composer',
+              description: page.description,
               pageCount: 1, // For now, each project is a single page
               noteCount: notes.length,
               updatedAt: new Date(page.created_at),
-              projectType: 'DNG' as const // Default to DNG, you can add this field to note_pages table
+              projectType: page.project_type || 'DNG'
             }
           } catch (noteError) {
             console.error(`Error loading notes for project ${page.id}:`, noteError)
             return {
               id: page.id,
               title: page.title,
-              composer: 'Unknown Composer',
-              description: undefined,
+              composer: page.composer || 'Unknown Composer',
+              description: page.description,
               pageCount: 1,
               noteCount: 0,
               updatedAt: new Date(page.created_at),
-              projectType: 'DNG' as const
+              projectType: page.project_type || 'DNG'
             }
           }
         })
@@ -91,12 +91,15 @@ export const useSupabase = () => {
 
   // Create a new project
   const createProject = useCallback(async (
-    title: string
+    title: string,
+    composer: string,
+    description?: string,
+    projectType: "DNG" | "DNR" = "DNG"
   ): Promise<string | null> => {
     try {
       setError(null)
       
-      const newPage = await notePagesApi.create(title)
+      const newPage = await notePagesApi.create(title, composer, description, projectType)
       if (!newPage) {
         throw new Error('Failed to create project')
       }
@@ -165,6 +168,8 @@ export const useSupabase = () => {
       return {
         id: notePage.id,
         title: notePage.title,
+        composer: notePage.composer,
+        projectType: notePage.project_type as "DNG" | "DNR" || "DNG",
         notes: placedNotes,
         timeSignature: { numerator: 4, denominator: 4 }, // Default values
         keySignature: 'C',

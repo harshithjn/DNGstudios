@@ -29,6 +29,11 @@ const articulations = [
   { id: "outline-dot", name: "Outline Dot", symbol: "○" },
 ]
 
+const barLines = [
+  { id: "bar-line", name: "Bar Line", symbol: "|", isExtensible: true },
+  { id: "double-bar-line", name: "Double Bar Line", symbol: "||", isExtensible: true },
+]
+
 const RightSidebar: React.FC<RightSidebarProps> = ({
   selectedArticulation,
   onArticulationSelect,
@@ -109,6 +114,30 @@ const RightSidebar: React.FC<RightSidebarProps> = ({
       </div>
 
       <div className="flex-1 overflow-y-auto">
+        {/* Bar Lines */}
+        <div className="border-b border-slate-700 p-4">
+          <h3 className="mb-3 flex items-center gap-2 text-sm font-medium text-white">
+            <span className="text-lg">|</span>
+            Bar Lines
+          </h3>
+          <div className="grid grid-cols-2 gap-2">
+            {barLines.map((barLine) => (
+              <button
+                key={barLine.id}
+                onClick={() => onArticulationSelect(selectedArticulation === barLine.id ? "" : barLine.id)}
+                className={`rounded-lg border p-3 text-center transition-all duration-200 ${
+                  selectedArticulation === barLine.id
+                    ? "border-blue-500 bg-blue-500/10 shadow-md shadow-blue-500/20"
+                    : "border-slate-600 bg-slate-800/50 hover:border-slate-500 hover:bg-slate-700/50"
+                }`}
+              >
+                <div className="mb-1 text-xl text-white">{barLine.symbol}</div>
+                <div className="text-xs text-slate-400">{barLine.name}</div>
+              </button>
+            ))}
+          </div>
+        </div>
+
         {/* Articulations */}
         <div className="border-b border-slate-700 p-4">
           <h3 className="mb-3 flex items-center gap-2 text-sm font-medium text-white">
@@ -170,27 +199,7 @@ const RightSidebar: React.FC<RightSidebarProps> = ({
           </button>
         </div>
 
-        {/* Drawing (Eraser) */}
-        <div className="border-b border-slate-700 p-4">
-          <h3 className="mb-3 flex items-center gap-2 text-sm font-medium text-white">
-            <Eraser className="h-4 w-4" />
-            Drawing
-          </h3>
-          <button
-            onClick={toggleEraser}
-            className={`flex w-full items-center justify-center gap-2 rounded-lg border p-3 transition-all duration-200 ${
-              activeTool === "eraser"
-                ? "border-red-500 bg-red-500/10 text-red-400"
-                : "border-slate-600 bg-slate-800/50 text-white hover:border-slate-500 hover:bg-slate-700/50"
-            }`}
-          >
-            <Eraser className="h-5 w-5" />
-            <div className="text-sm font-medium">{activeTool === "eraser" ? "Eraser ON" : "Enable Eraser"}</div>
-          </button>
-          <div className="mt-2 text-xs text-slate-400">
-            • Eraser removes freehand drawings and articulations on contact
-          </div>
-        </div>
+
 
         {/* Metronome */}
         <div className="border-b border-slate-700 p-4">

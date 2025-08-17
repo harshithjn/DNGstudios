@@ -7,6 +7,9 @@ ALTER DATABASE postgres SET "app.jwt_secret" TO 'your-jwt-secret';
 CREATE TABLE IF NOT EXISTS note_pages (
     id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
     title TEXT NOT NULL,
+    composer TEXT DEFAULT 'Unknown Composer',
+    description TEXT,
+    project_type TEXT DEFAULT 'DNG' CHECK (project_type IN ('DNG', 'DNR')),
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
@@ -38,10 +41,10 @@ CREATE POLICY "Allow all operations on notes" ON notes
     FOR ALL USING (true);
 
 -- Insert some sample data (optional)
-INSERT INTO note_pages (title) VALUES 
-    ('Sample Composition 1'),
-    ('Sample Composition 2'),
-    ('My First Score')
+INSERT INTO note_pages (title, composer, description, project_type) VALUES 
+    ('Sample Composition 1', 'John Doe', 'A beautiful classical piece', 'DNG'),
+    ('Sample Composition 2', 'Jane Smith', 'Modern jazz fusion', 'DNR'),
+    ('My First Score', 'Unknown Composer', 'Learning composition', 'DNG')
 ON CONFLICT DO NOTHING;
 
 -- Insert sample notes for the first page

@@ -10,6 +10,9 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey)
 export interface NotePage {
   id: string
   title: string
+  composer?: string
+  description?: string
+  project_type?: string
   created_at: string
 }
 
@@ -25,11 +28,21 @@ export interface Note {
 // CRUD functions for note pages
 export const notePagesApi = {
   // Create a new note page
-  async create(title: string): Promise<NotePage | null> {
+  async create(
+    title: string, 
+    composer?: string, 
+    description?: string, 
+    projectType?: string
+  ): Promise<NotePage | null> {
     try {
       const { data, error } = await supabase
         .from('note_pages')
-        .insert([{ title }])
+        .insert([{ 
+          title, 
+          composer: composer || 'Unknown Composer',
+          description,
+          project_type: projectType || 'DNG'
+        }])
         .select()
         .single()
       
