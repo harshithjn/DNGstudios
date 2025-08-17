@@ -22,7 +22,7 @@ const ModeSelector: React.FC<ModeSelectorProps> = ({ currentMode, onModeChange }
         }`}
       >
         <Music className="w-4 h-4" />
-        Normal
+        DNG
       </button>
       
       <button

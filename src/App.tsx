@@ -39,11 +39,23 @@ export interface ArticulationElement {
 }
 
 function App() {
-  const [showLandingPage, setShowLandingPage] = useState(true)
+  const [showLandingPage, setShowLandingPage] = useState(() => {
+    // Check if we're returning to a project (persist state on reload)
+    const savedProjectId = localStorage.getItem('currentProjectId')
+    const savedProject = localStorage.getItem('currentProject')
+    return !savedProjectId || !savedProject
+  })
   const [showFeaturesPage, setShowFeaturesPage] = useState(false)
-  const [currentProjectId, setCurrentProjectId] = useState<string | null>(null)
-  const [currentProject, setCurrentProject] = useState<ScorePage | null>(null)
-  const [isAuthenticated, setIsAuthenticated] = useState(false)
+  const [currentProjectId, setCurrentProjectId] = useState<string | null>(() => {
+    return localStorage.getItem('currentProjectId')
+  })
+  const [currentProject, setCurrentProject] = useState<ScorePage | null>(() => {
+    const saved = localStorage.getItem('currentProject')
+    return saved ? JSON.parse(saved) : null
+  })
+  const [isAuthenticated, setIsAuthenticated] = useState(() => {
+    return localStorage.getItem('isAuthenticated') === 'true'
+  })
   const [selectedNotation, setSelectedNotation] = useState<Notation | null>(null)
   const [selectedAccidental, setSelectedAccidental] = useState<string | null>(null)
   const [selectedArticulation, setSelectedArticulation] = useState<string | null>(null)
@@ -84,13 +96,29 @@ function App() {
     testSupabaseConnection()
   }, [])
 
+  // Load saved project on app startup if authenticated
+  useEffect(() => {
+    if (isAuthenticated && currentProjectId && currentProject) {
+      // Set the score mode based on project type
+      setScoreMode(currentProject.projectType === 'DNR' ? 'dnr' : 'normal')
+      // Reset undo/redo history with loaded project
+      resetNotesHistory(currentProject.notes)
+      resetTextHistory([])
+      resetArticulationHistory([])
+    }
+  }, [isAuthenticated, currentProjectId, currentProject, resetNotesHistory, resetTextHistory, resetArticulationHistory])
+
   // Handle authentication
   const handleAuthenticated = useCallback(() => {
     setIsAuthenticated(true)
+    localStorage.setItem('isAuthenticated', 'true')
   }, [])
 
   const handleLogout = useCallback(() => {
     setIsAuthenticated(false)
+    localStorage.removeItem('isAuthenticated')
+    localStorage.removeItem('currentProjectId')
+    localStorage.removeItem('currentProject')
   }, [])
 
   const handleLaunchApp = useCallback(() => {
@@ -118,6 +146,9 @@ function App() {
       resetNotesHistory(loadedProject.notes)
       resetTextHistory([])
       resetArticulationHistory([])
+      // Persist to localStorage
+      localStorage.setItem('currentProjectId', projectId)
+      localStorage.setItem('currentProject', JSON.stringify(loadedProject))
     }
   }, [loadScorePage, resetNotesHistory, resetTextHistory, resetArticulationHistory])
 
@@ -127,6 +158,9 @@ function App() {
     }
     setCurrentProjectId(null)
     setCurrentProject(null)
+    // Clear localStorage
+    localStorage.removeItem('currentProjectId')
+    localStorage.removeItem('currentProject')
   }
 
   const handleAddNote = async (note: PlacedNotation) => {
@@ -311,7 +345,6 @@ function App() {
         onLogout={handleLogout}
         scoreMode={scoreMode}
         onScoreModeChange={setScoreMode}
-        onBackToLanding={handleBackToLanding}
       />
       <div className="flex flex-1">
         <NotePalette
