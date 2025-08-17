@@ -2,15 +2,16 @@
 
 import type React from "react"
 import { useState, useEffect } from "react"
-import { Plus, Music2, Calendar, User, FileText, Trash2, Edit, Search, Loader2, RotateCcw, LogOut } from "lucide-react"
+import { Plus, Music2, Calendar, User, FileText, Trash2, Edit, Search, Loader2, RotateCcw, LogOut, ArrowLeft } from "lucide-react"
 import { useSupabase } from "../hooks/useSupabase"
 
 interface HomePageProps {
   onOpenProject: (projectId: string, projectType: "DNG" | "DNR") => void
   onLogout: () => void
+  onBackToLanding?: () => void
 }
 
-const HomePage: React.FC<HomePageProps> = ({ onOpenProject, onLogout }) => {
+const HomePage: React.FC<HomePageProps> = ({ onOpenProject, onLogout, onBackToLanding }) => {
   const { projects, loading, error, createProject, deleteProject } = useSupabase()
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [searchTerm, setSearchTerm] = useState("")
@@ -112,6 +113,15 @@ const HomePage: React.FC<HomePageProps> = ({ onOpenProject, onLogout }) => {
                 <Plus className="w-4 h-4" />
                 New Project
               </button>
+              {onBackToLanding && (
+                <button
+                  onClick={onBackToLanding}
+                  className="flex items-center gap-2 px-3 py-2 text-gray-300 hover:text-white hover:bg-gray-700 rounded-lg transition-all duration-300"
+                >
+                  <ArrowLeft className="w-4 h-4" />
+                  <span className="text-sm font-medium">Back to Landing</span>
+                </button>
+              )}
               <button
                 onClick={onLogout}
                 className="flex items-center gap-2 px-3 py-2 text-gray-300 hover:text-white hover:bg-gray-700 rounded-lg transition-all duration-300"

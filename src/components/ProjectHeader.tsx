@@ -10,6 +10,7 @@ interface ProjectHeaderProps {
   onLogout: () => void;
   scoreMode: ScoreMode;
   onScoreModeChange: (mode: ScoreMode) => void;
+  onBackToLanding?: () => void;
 }
 
 const ProjectHeader: React.FC<ProjectHeaderProps> = ({
@@ -19,6 +20,7 @@ const ProjectHeader: React.FC<ProjectHeaderProps> = ({
   onLogout,
   scoreMode,
   onScoreModeChange,
+  onBackToLanding,
 }) => {
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [tempTitle, setTempTitle] = useState(project.title);
@@ -113,6 +115,15 @@ const ProjectHeader: React.FC<ProjectHeaderProps> = ({
               currentMode={scoreMode} 
               onModeChange={onScoreModeChange} 
             />
+            {onBackToLanding && (
+              <button
+                onClick={onBackToLanding}
+                className="flex items-center gap-2 px-3 py-2 text-gray-300 hover:text-white hover:bg-gray-700 rounded-lg transition-all duration-300"
+              >
+                <ArrowLeft className="w-4 h-4" />
+                <span className="text-sm font-medium">Back to Landing</span>
+              </button>
+            )}
             <button
               onClick={onLogout}
               className="flex items-center gap-2 px-3 py-2 text-gray-300 hover:text-white hover:bg-gray-700 rounded-lg transition-all duration-300"

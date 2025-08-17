@@ -8,6 +8,8 @@ import ScoreSheet from "./components/ScoreSheet"
 import DNRScoresheet from "./components/DNRScoresheet"
 import RightSidebar from "./components/RightSidebar"
 import Auth from "./components/Auth"
+import LandingPage from "./components/LandingPage"
+import FeaturesPage from "./components/FeaturesPage"
 import { useSupabase, type ScorePage, type PlacedNotation } from "./hooks/useSupabase"
 import { testSupabaseConnection } from "./lib/test-connection"
 import type { Notation } from "./data/notations"
@@ -37,6 +39,8 @@ export interface ArticulationElement {
 }
 
 function App() {
+  const [showLandingPage, setShowLandingPage] = useState(true)
+  const [showFeaturesPage, setShowFeaturesPage] = useState(false)
   const [currentProjectId, setCurrentProjectId] = useState<string | null>(null)
   const [currentProject, setCurrentProject] = useState<ScorePage | null>(null)
   const [isAuthenticated, setIsAuthenticated] = useState(false)
@@ -87,6 +91,20 @@ function App() {
 
   const handleLogout = useCallback(() => {
     setIsAuthenticated(false)
+  }, [])
+
+  const handleLaunchApp = useCallback(() => {
+    setShowLandingPage(false)
+  }, [])
+
+  const handleBackToLanding = useCallback(() => {
+    setShowLandingPage(true)
+    setShowFeaturesPage(false)
+  }, [])
+
+  const handleShowFeatures = useCallback(() => {
+    setShowLandingPage(false)
+    setShowFeaturesPage(true)
   }, [])
 
   const handleOpenProject = useCallback(async (projectId: string, projectType: "DNG" | "DNR") => {
@@ -259,6 +277,16 @@ function App() {
     }
   }, [currentProject, currentProjectId, saveNotes])
 
+  // Show landing page first
+  if (showLandingPage) {
+    return <LandingPage onLaunchApp={handleLaunchApp} onShowFeatures={handleShowFeatures} />
+  }
+
+  // Show features page
+  if (showFeaturesPage) {
+    return <FeaturesPage onBackToLanding={handleBackToLanding} onLaunchApp={handleLaunchApp} />
+  }
+
   // Show authentication screen if not authenticated
   if (!isAuthenticated) {
     return <Auth onAuthenticated={handleAuthenticated} />
@@ -269,6 +297,7 @@ function App() {
       <HomePage
         onOpenProject={handleOpenProject}
         onLogout={handleLogout}
+        onBackToLanding={handleBackToLanding}
       />
     )
   }
@@ -282,6 +311,7 @@ function App() {
         onLogout={handleLogout}
         scoreMode={scoreMode}
         onScoreModeChange={setScoreMode}
+        onBackToLanding={handleBackToLanding}
       />
       <div className="flex flex-1">
         <NotePalette

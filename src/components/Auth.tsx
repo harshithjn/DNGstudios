@@ -53,7 +53,7 @@ const Auth: React.FC<AuthProps> = ({ onAuthenticated }) => {
             <Music className="w-10 h-10 text-white" />
           </div>
           <h1 className="text-3xl font-bold text-white mb-2 tracking-wide">
-            DNG Music
+            DNG Studios
           </h1>
           <p className="text-gray-400">Enter your 4-digit PIN to continue</p>
         </div>
