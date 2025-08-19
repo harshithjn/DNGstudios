@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { notePagesApi, notesApi } from '../lib/supabase'
-import { type Notation } from '../data/notations'
+import { type Notation, getNotationBySymbol } from '../data/notations'
 import type { TextElement, ArticulationElement, LyricElement, HighlighterElement } from '../App'
 
 export interface ProjectSummary {
@@ -56,25 +56,7 @@ export const useSupabase = () => {
       setLoading(true)
       setError(null)
       
-      // Temporarily bypass database - load from localStorage
-      console.log('Bypassing database load - loading from localStorage')
-      const savedProjects = localStorage.getItem('projects')
-      if (savedProjects) {
-        const projects = JSON.parse(savedProjects)
-        // Convert dates back to Date objects
-        const projectsWithDates = projects.map((project: any) => ({
-          ...project,
-          updatedAt: new Date(project.updatedAt)
-        }))
-        console.log('Loaded projects from localStorage:', projectsWithDates)
-        setProjects(projectsWithDates)
-      } else {
-        console.log('No saved projects found, starting with empty list')
-        setProjects([])
-      }
-      
-      // Uncomment this when database is set up:
-      /*
+      console.log('Loading projects from Supabase database...')
       const notePages = await notePagesApi.fetchAll()
       
       // Convert note pages to project summaries
@@ -109,8 +91,8 @@ export const useSupabase = () => {
         })
       )
       
+      console.log('Loaded projects from database:', projectSummaries)
       setProjects(projectSummaries)
-      */
     } catch (err) {
       console.error('Error loading projects:', err)
       setError('Failed to load projects')
@@ -129,44 +111,18 @@ export const useSupabase = () => {
     try {
       setError(null)
       
-      // Temporarily bypass database for testing - create a local project
-      const projectId = Date.now().toString()
-      const newProject = {
-        id: projectId,
-        title: title,
-        composer: composer || 'Unknown Composer',
-        description: description || '',
-        pageCount: 1,
-        noteCount: 0,
-        updatedAt: new Date(),
-        projectType: projectType
-      }
-      
-      console.log('Creating local project:', newProject)
-      
-      // Add to local projects list
-      setProjects(prev => {
-        const updatedProjects = [newProject, ...prev]
-        // Save to localStorage
-        localStorage.setItem('projects', JSON.stringify(updatedProjects))
-        console.log('Saved projects to localStorage:', updatedProjects)
-        return updatedProjects
-      })
-      
-      return projectId
-      
-      // Uncomment this when database is set up:
-      /*
+      console.log('Creating project in Supabase database...')
       const newPage = await notePagesApi.create(title, composer, description, projectType)
       if (!newPage) {
         throw new Error('Failed to create project')
       }
       
+      console.log('Project created successfully:', newPage)
+      
       // Reload projects to include the new one
       await loadProjects()
       
       return newPage.id
-      */
     } catch (err) {
       console.error('Error creating project:', err)
       setError('Failed to create project')
@@ -179,21 +135,8 @@ export const useSupabase = () => {
     try {
       setError(null)
       
-      // Temporarily bypass database for testing - remove from local projects
-      console.log('Deleting local project:', projectId)
+      console.log('Deleting project from Supabase database:', projectId)
       
-      setProjects(prev => {
-        const updatedProjects = prev.filter(project => project.id !== projectId)
-        // Update localStorage
-        localStorage.setItem('projects', JSON.stringify(updatedProjects))
-        console.log('Updated projects in localStorage after deletion:', updatedProjects)
-        return updatedProjects
-      })
-      
-      return true
-      
-      // Uncomment this when database is set up:
-      /*
       // Delete all notes for the project first
       await notesApi.deleteByPageId(projectId)
       
@@ -203,11 +146,12 @@ export const useSupabase = () => {
         throw new Error('Failed to delete project')
       }
       
+      console.log('Project deleted successfully')
+      
       // Reload projects to reflect the deletion
       await loadProjects()
       
       return true
-      */
     } catch (err) {
       console.error('Error deleting project:', err)
       setError('Failed to delete project')
@@ -220,36 +164,23 @@ export const useSupabase = () => {
     try {
       setError(null)
       
-      // Temporarily bypass database - return a default page
-      const scorePage: ScorePage = {
-        id: projectId,
-        title: 'Default Project',
-        notes: [],
-        timeSignature: { numerator: 4, denominator: 4 },
-        keySignature: 'C',
-        tempo: 120,
-        keyboardLineSpacing: 100,
-        projectType: 'DNG'
-      }
+      console.log('Loading score page from Supabase database:', projectId)
       
-      console.log('Returning default score page:', scorePage)
-      return scorePage
-      
-      // Uncomment this when database is set up:
-      /*
       const notePage = await notePagesApi.fetchById(projectId)
       if (!notePage) {
         throw new Error('Project not found')
       }
       
       const notes = await notesApi.fetchByPageId(projectId)
+      console.log('Loaded notes from database:', notes)
       
       // Convert database notes to PlacedNotation format
       const placedNotes: PlacedNotation[] = notes.map((note) => {
-        const notation = getNotationByKey(note.symbol)
+        // Find the notation by symbol (a-z, A-Z)
+        const notation = getNotationBySymbol(note.symbol)
         return {
           id: note.id,
-          notation: notation || getNotationByKey('a')!, // Fallback to 'a' if symbol not found
+          notation: notation || getNotationBySymbol('a')!, // Fallback to 'a' if symbol not found
           x: note.position_x,
           y: note.position_y,
           staveIndex: 0,
@@ -257,18 +188,19 @@ export const useSupabase = () => {
         }
       })
       
-      return {
+      const scorePage: ScorePage = {
         id: notePage.id,
         title: notePage.title,
-        composer: notePage.composer,
-        projectType: notePage.project_type as "DNG" | "DNR" || "DNG",
         notes: placedNotes,
         timeSignature: { numerator: 4, denominator: 4 }, // Default values
         keySignature: 'C',
         tempo: 120,
-        keyboardLineSpacing: 108
+        keyboardLineSpacing: 100,
+        projectType: notePage.project_type as "DNG" | "DNR" || "DNG"
       }
-      */
+      
+      console.log('Returning score page from database:', scorePage)
+      return scorePage
     } catch (err) {
       console.error('Error loading score page:', err)
       setError('Failed to load score page')
@@ -286,12 +218,6 @@ export const useSupabase = () => {
       
       console.log('saveNotes called with projectId:', projectId, 'notes count:', notes.length)
       
-      // Temporarily bypass database - always return success
-      console.log('Bypassing database save - returning success')
-      return true
-      
-      // Uncomment this when database is set up:
-      /*
       // Only save if we have notes to save
       if (notes.length === 0) {
         console.log('No notes to save, returning early')
@@ -309,10 +235,9 @@ export const useSupabase = () => {
       )
       
       await Promise.all(notePromises)
-      console.log('Successfully saved all notes')
+      console.log('Successfully saved all notes to database')
       
       return true
-      */
     } catch (err) {
       console.error('Error saving notes:', err)
       setError('Failed to save notes')
@@ -330,16 +255,6 @@ export const useSupabase = () => {
       
       console.log('addNote called with projectId:', projectId, 'note:', note)
       
-      // Temporarily bypass database for testing - return the note directly
-      const result = {
-        ...note,
-        id: note.id || Date.now().toString()
-      }
-      console.log('Returning note with ID:', result.id)
-      return result
-      
-      // Uncomment this when database is set up:
-      /*
       const createdNote = await notesApi.create(
         projectId, 
         note.notation.alphabet, 
@@ -361,7 +276,6 @@ export const useSupabase = () => {
       
       console.log('No note created, returning null')
       return null
-      */
     } catch (err) {
       console.error('Error adding note:', err)
       setError('Failed to add note')
@@ -379,16 +293,9 @@ export const useSupabase = () => {
       
       console.log('Attempting to delete note with ID:', noteId)
       
-      // Temporarily bypass database - always return success
-      console.log('Bypassing database delete - returning success')
-      return true
-      
-      // Uncomment this when database is set up:
-      /*
       const success = await notesApi.delete(noteId)
       console.log('Delete result:', success)
       return success
-      */
     } catch (err) {
       console.error('Error removing note:', err)
       setError('Failed to remove note')
@@ -404,31 +311,13 @@ export const useSupabase = () => {
     try {
       setError(null)
       
-      // Temporarily bypass database for testing - update local project
-      console.log('Updating local project:', projectId, updates)
+      console.log('Updating project in database:', projectId, updates)
       
-      setProjects(prev => {
-        const updatedProjects = prev.map(project => 
-          project.id === projectId 
-            ? { ...project, ...updates, updatedAt: new Date() }
-            : project
-        )
-        // Update localStorage
-        localStorage.setItem('projects', JSON.stringify(updatedProjects))
-        console.log('Updated projects in localStorage:', updatedProjects)
-        return updatedProjects
-      })
-      
-      return true
-      
-      // Uncomment this when database is set up:
-      /*
       const success = await notePagesApi.update(projectId, updates)
       if (success) {
         await loadProjects()
       }
       return success
-      */
     } catch (err) {
       console.error('Error updating project:', err)
       setError('Failed to update project')

@@ -78,6 +78,11 @@ export const getNotationByKey = (key: string): Notation | null => {
   return keyboardMapping[key] || null
 }
 
+// Helper function to get notation by symbol (alias for getNotationByKey)
+export const getNotationBySymbol = (symbol: string): Notation | null => {
+  return keyboardMapping[symbol] || null
+}
+
 // Helper function to get all notations for a specific case
 export const getLowercaseNotations = (): Notation[] => {
   return notations.filter((notation) => notation.alphabet >= "a" && notation.alphabet <= "z")
