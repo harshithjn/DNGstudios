@@ -367,9 +367,12 @@ const DNRScoresheet: React.FC<DNRScoresheetProps> = ({
   // Optimized function to delete the last note
   const deleteLastNote = useCallback(() => {
     console.log("deleteLastNote called, notes length:", currentPage.notes.length)
+    console.log("Current page notes:", currentPage.notes)
     if (currentPage.notes.length > 0) {
       const lastNote = currentPage.notes[currentPage.notes.length - 1]
-      console.log("Deleting note with ID:", lastNote.id, "Type:", typeof lastNote.id)
+      console.log("Deleting last note:", lastNote)
+      console.log("Note ID:", lastNote.id, "Type:", typeof lastNote.id)
+      console.log("Calling onRemoveNote with ID:", lastNote.id)
       onRemoveNote(lastNote.id)
     } else {
       console.log("No notes to delete")
@@ -463,7 +466,8 @@ const DNRScoresheet: React.FC<DNRScoresheetProps> = ({
       if (key === "Backspace" || key === "Delete") {
         event.preventDefault()
         event.stopPropagation()
-        console.log("Backspace/Delete key pressed")
+        console.log("Backspace/Delete key pressed - calling deleteLastNote")
+        console.log("Current notes before deletion:", currentPage.notes.length)
         deleteLastNote()
         return
       }

@@ -616,9 +616,12 @@ const ScoreSheet: React.FC<ScoreSheetProps> = ({
   // Optimized function to delete the last note
   const deleteLastNote = useCallback(() => {
     console.log("deleteLastNote called, notes length:", currentPage.notes.length)
+    console.log("Current page notes:", currentPage.notes)
     if (currentPage.notes.length > 0) {
       const lastNote = currentPage.notes[currentPage.notes.length - 1]
-      console.log("Deleting note with ID:", lastNote.id, "Type:", typeof lastNote.id)
+      console.log("Deleting last note:", lastNote)
+      console.log("Note ID:", lastNote.id, "Type:", typeof lastNote.id)
+      console.log("Calling onRemoveNote with ID:", lastNote.id)
       onRemoveNote(lastNote.id)
     } else {
       console.log("No notes to delete")
@@ -698,6 +701,16 @@ const ScoreSheet: React.FC<ScoreSheetProps> = ({
   const handleKeyPress = useCallback(
     (event: KeyboardEvent) => {
       console.log('Key pressed:', event.key, 'Keyboard enabled:', keyboardEnabled)
+      console.log('All blocking conditions:', {
+        keyboardEnabled,
+        showSettingsDropdown,
+        showKeyboardHelp,
+        showToolsDropdown,
+        activeTool,
+        showTextDialog,
+        showLyricsDialog,
+        isLyricsMode
+      })
       
       if (
         !keyboardEnabled ||
@@ -749,7 +762,8 @@ const ScoreSheet: React.FC<ScoreSheetProps> = ({
       if (key === "Backspace" || key === "Delete") {
         event.preventDefault()
         event.stopPropagation()
-        console.log("Backspace/Delete key pressed")
+        console.log("Backspace/Delete key pressed - calling deleteLastNote")
+        console.log("Current notes before deletion:", currentPage.notes.length)
         deleteLastNote()
         return
       }
@@ -1225,13 +1239,17 @@ const ScoreSheet: React.FC<ScoreSheetProps> = ({
   // Event listeners setup
   useEffect(() => {
     if (keyboardEnabled) {
+      console.log('Setting up keyboard event listeners')
       const handleKeyDown = (e: KeyboardEvent) => handleKeyPress(e)
       document.addEventListener("keydown", handleKeyDown, true)
       window.addEventListener("keydown", handleKeyDown, true)
       return () => {
+        console.log('Cleaning up keyboard event listeners')
         document.removeEventListener("keydown", handleKeyDown, true)
         window.removeEventListener("keydown", handleKeyDown, true)
       }
+    } else {
+      console.log('Keyboard not enabled, skipping event listener setup')
     }
   }, [handleKeyPress, keyboardEnabled])
 

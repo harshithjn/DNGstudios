@@ -254,6 +254,8 @@ export const useSupabase = () => {
       setError(null)
       
       console.log('addNote called with projectId:', projectId, 'note:', note)
+      console.log('Note notation alphabet:', note.notation.alphabet)
+      console.log('Note position:', { x: note.x, y: note.y })
       
       const createdNote = await notesApi.create(
         projectId, 
@@ -291,10 +293,11 @@ export const useSupabase = () => {
     try {
       setError(null)
       
-      console.log('Attempting to delete note with ID:', noteId)
+      console.log('removeNote called with projectId:', projectId, 'noteId:', noteId)
+      console.log('Note ID type:', typeof noteId)
       
       const success = await notesApi.delete(noteId)
-      console.log('Delete result:', success)
+      console.log('Database delete result:', success)
       return success
     } catch (err) {
       console.error('Error removing note:', err)

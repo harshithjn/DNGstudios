@@ -241,22 +241,84 @@ function App() {
 
   const handleAddNote = async (note: PlacedNotation) => {
     console.log('handleAddNote called with:', note)
+    console.log('Current project:', currentProject)
+    console.log('Current project ID:', currentProjectId)
     if (currentProject && currentProjectId) {
       console.log('Current project ID:', currentProjectId)
       console.log('Current notes count:', currentProject.notes.length)
-      const createdNote = await addNote(currentProjectId, note)
-      console.log('Created note result:', createdNote)
-      if (createdNote) {
-        const newNotes = [...currentProject.notes, createdNote]
-        console.log('New notes array length:', newNotes.length)
+      
+      try {
+        const createdNote = await addNote(currentProjectId, note)
+        console.log('Created note result:', createdNote)
         
-        // Update current project state
+        if (createdNote) {
+          const newNotes = [...currentProject.notes, createdNote]
+          console.log('New notes array length:', newNotes.length)
+          
+          // Update current project state
+          setCurrentProject(prev => prev ? {
+            ...prev,
+            notes: newNotes
+          } : null)
+          
+          // Update the page in the pages array
+          setPages(prevPages => 
+            prevPages.map((page, index) => 
+              index === currentPageIndex 
+                ? { ...page, notes: newNotes }
+                : page
+            )
+          )
+          
+          // Push to unified history with the new notes
+          console.log('Pushing to history with', newNotes.length, 'notes')
+          pushHistoryState({
+            notes: newNotes,
+            textElements: textElements,
+            articulationElements: articulationElements,
+            timestamp: Date.now()
+          })
+          
+          console.log('Note added successfully, history should be updated')
+        } else {
+          console.error('Failed to create note - addNote returned null')
+          // Fallback: Add note locally if database fails
+          console.log('Adding note locally as fallback')
+          const fallbackNote = { ...note, id: Date.now().toString() }
+          const newNotes = [...currentProject.notes, fallbackNote]
+          
+          setCurrentProject(prev => prev ? {
+            ...prev,
+            notes: newNotes
+          } : null)
+          
+          setPages(prevPages => 
+            prevPages.map((page, index) => 
+              index === currentPageIndex 
+                ? { ...page, notes: newNotes }
+                : page
+            )
+          )
+          
+          pushHistoryState({
+            notes: newNotes,
+            textElements: textElements,
+            articulationElements: articulationElements,
+            timestamp: Date.now()
+          })
+        }
+      } catch (error) {
+        console.error('Error in handleAddNote:', error)
+        // Fallback: Add note locally if database fails
+        console.log('Adding note locally as fallback due to error')
+        const fallbackNote = { ...note, id: Date.now().toString() }
+        const newNotes = [...currentProject.notes, fallbackNote]
+        
         setCurrentProject(prev => prev ? {
           ...prev,
           notes: newNotes
         } : null)
         
-        // Update the page in the pages array
         setPages(prevPages => 
           prevPages.map((page, index) => 
             index === currentPageIndex 
@@ -265,16 +327,12 @@ function App() {
           )
         )
         
-        // Push to unified history with the new notes
-        console.log('Pushing to history with', newNotes.length, 'notes')
         pushHistoryState({
           notes: newNotes,
           textElements: textElements,
           articulationElements: articulationElements,
           timestamp: Date.now()
         })
-        
-        console.log('Note added successfully, history should be updated')
       }
     } else {
       console.log('No current project or project ID')
@@ -282,16 +340,78 @@ function App() {
   }
 
   const handleRemoveNote = async (noteId: string) => {
+    console.log('handleRemoveNote called with noteId:', noteId)
+    console.log('Current project:', currentProject)
+    console.log('Current project ID:', currentProjectId)
+    
     if (currentProject && currentProjectId) {
-      const success = await removeNote(currentProjectId, noteId)
-      if (success) {
+      try {
+        const success = await removeNote(currentProjectId, noteId)
+        console.log('Remove note result:', success)
+        
+        if (success) {
+          const newNotes = currentProject.notes.filter(note => note.id !== noteId)
+          console.log('New notes array length after removal:', newNotes.length)
+          
+          setCurrentProject(prev => prev ? {
+            ...prev,
+            notes: newNotes
+          } : null)
+          
+          // Update the page in the pages array
+          setPages(prevPages => 
+            prevPages.map((page, index) => 
+              index === currentPageIndex 
+                ? { ...page, notes: newNotes }
+                : page
+            )
+          )
+          
+          // Push to unified history
+          pushHistoryState({
+            notes: newNotes,
+            textElements: textElements,
+            articulationElements: articulationElements,
+            timestamp: Date.now()
+          })
+          
+          console.log('Note removed successfully')
+        } else {
+          console.error('Failed to remove note from database - applying fallback')
+          // Fallback: Remove note locally if database fails
+          const newNotes = currentProject.notes.filter(note => note.id !== noteId)
+          
+          setCurrentProject(prev => prev ? {
+            ...prev,
+            notes: newNotes
+          } : null)
+          
+          setPages(prevPages => 
+            prevPages.map((page, index) => 
+              index === currentPageIndex 
+                ? { ...page, notes: newNotes }
+                : page
+            )
+          )
+          
+          pushHistoryState({
+            notes: newNotes,
+            textElements: textElements,
+            articulationElements: articulationElements,
+            timestamp: Date.now()
+          })
+        }
+      } catch (error) {
+        console.error('Error in handleRemoveNote:', error)
+        // Fallback: Remove note locally if database fails
+        console.log('Removing note locally as fallback due to error')
         const newNotes = currentProject.notes.filter(note => note.id !== noteId)
+        
         setCurrentProject(prev => prev ? {
           ...prev,
           notes: newNotes
         } : null)
         
-        // Update the page in the pages array
         setPages(prevPages => 
           prevPages.map((page, index) => 
             index === currentPageIndex 
@@ -300,7 +420,6 @@ function App() {
           )
         )
         
-        // Push to unified history
         pushHistoryState({
           notes: newNotes,
           textElements: textElements,
@@ -308,6 +427,8 @@ function App() {
           timestamp: Date.now()
         })
       }
+    } else {
+      console.log('No current project or project ID')
     }
   }
 
