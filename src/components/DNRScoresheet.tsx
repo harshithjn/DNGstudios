@@ -21,6 +21,7 @@ import html2canvas from "html2canvas"
 import jsPDF from "jspdf"
 import type { TextElement, ArticulationElement } from "../App"
 import PianoComponent from "./Piano"
+import { useCursorNavigation } from "../hooks/useCursorNavigation"
 
 interface PlacedNotation {
   id: string
@@ -50,7 +51,6 @@ interface DNRScoresheetProps {
   onAddNote: (note: PlacedNotation) => void
   onRemoveNote: (noteId: string) => void
   onUpdateNote: (noteId: string, updates: Partial<PlacedNotation>) => void
-  onClearPage?: () => void
   onUpdatePageSettings?: (settings: Partial<ScorePage>) => void
   textElements: TextElement[]
   onAddTextElement?: (textElement: TextElement) => void
@@ -120,7 +120,6 @@ const DNRScoresheet: React.FC<DNRScoresheetProps> = ({
   onAddNote,
   onRemoveNote,
   onUpdateNote,
-  onClearPage,
   onUpdatePageSettings,
   textElements,
   onAddTextElement,
@@ -164,11 +163,11 @@ const DNRScoresheet: React.FC<DNRScoresheetProps> = ({
   const [selectedNoteId, setSelectedNoteId] = useState<string | null>(null)
 
   // Score info positions
-  const [timeSignaturePos, setTimeSignaturePos] = useState(
+  const [timeSignaturePos] = useState(
     currentPage.timeSignaturePosition || DEFAULT_TIME_SIGNATURE_POS,
   )
-  const [keyPos, setKeyPos] = useState(currentPage.keySignaturePosition || DEFAULT_KEY_POS)
-  const [tempoPos, setTempoPos] = useState(currentPage.tempoPosition || DEFAULT_TEMPO_POS)
+  const [keyPos] = useState(currentPage.keySignaturePosition || DEFAULT_KEY_POS)
+  const [tempoPos] = useState(currentPage.tempoPosition || DEFAULT_TEMPO_POS)
 
   // Drag state for text elements
   const [draggedTextId, setDraggedTextId] = useState<string | null>(null)
@@ -185,6 +184,12 @@ const DNRScoresheet: React.FC<DNRScoresheetProps> = ({
   const isInteracting = useRef(false)
   const currentLine = useRef<Array<{ x: number; y: number }>>([])
   const midiTimeoutRef = useRef<{ [key: number]: number }>({})
+
+  // Initialize cursor navigation
+  const {
+    cursorPosition,
+    isBlinking
+  } = useCursorNavigation(currentPage.notes)
 
   // Calculate current keyboard line Y position
   const currentKeyboardLineY = KEYBOARD_LINE_Y_POSITIONS[currentKeyboardLineIndex]
@@ -214,7 +219,7 @@ const DNRScoresheet: React.FC<DNRScoresheetProps> = ({
         y: e.clientY - textElement.y,
       })
     },
-    [textElements],
+    [textElements, onUpdateTextElement],
   )
 
   const handleTextMouseMove = useCallback(
@@ -231,7 +236,7 @@ const DNRScoresheet: React.FC<DNRScoresheetProps> = ({
         console.warn('onUpdateTextElement not available:', error)
       }
     },
-    [draggedTextId, dragOffset],
+    [draggedTextId, dragOffset, onUpdateTextElement],
   )
 
   const handleTextMouseUp = useCallback(() => {
@@ -870,7 +875,7 @@ const DNRScoresheet: React.FC<DNRScoresheetProps> = ({
       midiTimeoutRef.current = {}
       setMidiInputs([])
     }
-  }, [midiEnabled, handleMidiMessage])
+  }, [midiEnabled, handleMidiMessage, midiInputs])
 
   // Event listeners setup
   useEffect(() => {
@@ -1216,7 +1221,7 @@ const DNRScoresheet: React.FC<DNRScoresheetProps> = ({
         >
           {/* DNR Background Image */}
           <img
-            src="images/dnr-background.jpg"
+            src="/images/dnr-background.jpg"
             alt="DNR Scoresheet Background"
             style={{
               position: "absolute",
@@ -1362,6 +1367,19 @@ const DNRScoresheet: React.FC<DNRScoresheetProps> = ({
                 </div>
               </div>
             ))}
+
+            {/* Blinking cursor indicator */}
+            {cursorPosition.isVisible && (
+              <div
+                className={`absolute w-1 h-8 bg-red-500 z-30 pointer-events-none transition-opacity duration-100 ${
+                  isBlinking ? 'opacity-100' : 'opacity-0'
+                }`}
+                style={{
+                  left: `${cursorPosition.x}px`,
+                  top: `${cursorPosition.y - 16}px`,
+                }}
+              />
+            )}
 
             {/* Text elements */}
             {textElements.map((textElement) => (

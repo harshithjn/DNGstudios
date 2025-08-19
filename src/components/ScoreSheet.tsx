@@ -19,9 +19,11 @@ import {
 import { notations, getNotationByKey, type Notation } from "../data/notations"
 import html2canvas from "html2canvas"
 import jsPDF from "jspdf"
-import type { TextElement, ArticulationElement } from "../App"
+import type { TextElement, ArticulationElement, LyricElement, HighlighterElement } from "../App"
+
 import PianoComponent from "./Piano"
 import type { ScoreMode } from "./ModeSelector"
+import { useCursorNavigation } from "../hooks/useCursorNavigation"
 
 interface PlacedNotation {
   id: string
@@ -63,11 +65,22 @@ interface ScoreSheetProps {
   onUpdateArticulation: (id: string, updates: Partial<ArticulationElement>) => void
   selectedArticulation: string | null
   isTextMode: boolean
+  isLyricsMode?: boolean
+  isHighlighterMode?: boolean
+  selectedHighlighterColor?: 'red' | 'green' | 'blue' | 'yellow'
+  lyricElements?: LyricElement[]
+  onAddLyric?: (lyric: LyricElement) => void
+  onRemoveLyric?: (id: string) => void
+  onUpdateLyric?: (id: string, updates: Partial<LyricElement>) => void
+  highlighterElements?: HighlighterElement[]
+  onAddHighlighter?: (highlighter: HighlighterElement) => void
+
   canUndo: boolean
   canRedo: boolean
   onUndo: () => void
   onRedo: () => void
   scoreMode: ScoreMode
+
 }
 
 const A4_WIDTH_PX = 794
@@ -181,11 +194,26 @@ const ScoreSheet: React.FC<ScoreSheetProps> = ({
   onUpdateArticulation,
   selectedArticulation,
   isTextMode,
+  isLyricsMode = false,
+  isHighlighterMode = false,
+  selectedHighlighterColor = 'yellow',
+  lyricElements = [],
+  onAddLyric,
+  onRemoveLyric,
+  onUpdateLyric,
+  highlighterElements = [],
+  onAddHighlighter,
+
+
+
+
+
   canUndo,
   canRedo,
   onUndo,
   onRedo,
   scoreMode,
+
 }) => {
   const [showSettingsDropdown, setShowSettingsDropdown] = useState(false)
   const [showToolsDropdown, setShowToolsDropdown] = useState(false)
@@ -203,7 +231,17 @@ const ScoreSheet: React.FC<ScoreSheetProps> = ({
   const [newTextBold, setNewTextBold] = useState(false)
   const [newTextItalic, setNewTextItalic] = useState(false)
   const [newTextUnderline, setNewTextUnderline] = useState(false)
+  const [showLyricsDialog, setShowLyricsDialog] = useState(false)
+  const [lyricsDialogPosition, setLyricsDialogPosition] = useState({ x: 0, y: 0 })
+  const [newLyricsContent, setNewLyricsContent] = useState("")
+  const [selectedNoteForLyrics, setSelectedNoteForLyrics] = useState<string | null>(null)
 
+  // Cursor navigation
+  const {
+    cursorPosition,
+    isBlinking,
+    setCursorToNote
+  } = useCursorNavigation(currentPage.notes)
 
   const midiTimeoutRef = useRef<{ [key: number]: number }>({})
 
@@ -219,6 +257,8 @@ const ScoreSheet: React.FC<ScoreSheetProps> = ({
 
   // Calculate current keyboard line Y position
   const currentKeyboardLineY = KEYBOARD_LINE_Y_POSITIONS[currentKeyboardLineIndex]
+
+
 
   // Sync internal positions with currentPage props if they change externally
   useEffect(() => {
@@ -278,6 +318,15 @@ const ScoreSheet: React.FC<ScoreSheetProps> = ({
   const [noteDragOffset, setNoteDragOffset] = useState({ x: 0, y: 0 })
   const [isDraggingNote, setIsDraggingNote] = useState(false)
   const [selectedNoteId, setSelectedNoteId] = useState<string | null>(null)
+
+  // Drag state for lyrics
+  const [draggedLyricId, setDraggedLyricId] = useState<string | null>(null)
+  const [lyricDragOffset, setLyricDragOffset] = useState({ x: 0, y: 0 })
+
+  // Highlighter state
+  const [isDrawingHighlight, setIsDrawingHighlight] = useState(false)
+  const [highlightStart, setHighlightStart] = useState({ x: 0, y: 0 })
+  const [currentHighlight, setCurrentHighlight] = useState({ x: 0, y: 0, width: 0, height: 0 })
 
 
 
@@ -439,6 +488,93 @@ const ScoreSheet: React.FC<ScoreSheetProps> = ({
     // Don't clear selectedNoteId here - keep it selected after dragging
   }, [])
 
+  // Lyrics drag handlers
+  const handleLyricMouseDown = useCallback(
+    (e: React.MouseEvent, lyricId: string) => {
+      e.preventDefault()
+      e.stopPropagation()
+      const lyricElement = lyricElements.find((l) => l.id === lyricId)
+      if (!lyricElement) return
+
+      setDraggedLyricId(lyricId)
+      setLyricDragOffset({
+        x: e.clientX - lyricElement.x,
+        y: e.clientY - lyricElement.y,
+      })
+    },
+    [lyricElements],
+  )
+
+  const handleLyricMouseMove = useCallback(
+    (e: React.MouseEvent) => {
+      if (!draggedLyricId) return
+      e.preventDefault()
+
+      const newX = e.clientX - lyricDragOffset.x
+      const newY = e.clientY - lyricDragOffset.y
+
+      onUpdateLyric?.(draggedLyricId, { x: newX, y: newY })
+    },
+    [draggedLyricId, lyricDragOffset, onUpdateLyric],
+  )
+
+  const handleLyricMouseUp = useCallback(() => {
+    setDraggedLyricId(null)
+    setLyricDragOffset({ x: 0, y: 0 })
+  }, [])
+
+  // Highlighter handlers
+  const handleHighlighterMouseDown = useCallback((event: React.MouseEvent<HTMLDivElement>) => {
+    if (!isHighlighterMode) return
+    
+    const rect = event.currentTarget.getBoundingClientRect()
+    const x = event.clientX - rect.left
+    const y = event.clientY - rect.top
+    
+    setIsDrawingHighlight(true)
+    setHighlightStart({ x, y })
+    setCurrentHighlight({ x, y, width: 0, height: 0 })
+  }, [isHighlighterMode])
+
+  const handleHighlighterMouseMove = useCallback((event: React.MouseEvent<HTMLDivElement>) => {
+    if (!isDrawingHighlight || !isHighlighterMode) return
+    
+    const rect = event.currentTarget.getBoundingClientRect()
+    const x = event.clientX - rect.left
+    const y = event.clientY - rect.top
+    
+    const width = x - highlightStart.x
+    const height = y - highlightStart.y
+    
+    setCurrentHighlight({
+      x: width < 0 ? x : highlightStart.x,
+      y: height < 0 ? y : highlightStart.y,
+      width: Math.abs(width),
+      height: Math.abs(height)
+    })
+  }, [isDrawingHighlight, isHighlighterMode, highlightStart])
+
+  const handleHighlighterMouseUp = useCallback(() => {
+    if (!isDrawingHighlight || !isHighlighterMode) return
+    
+    if (currentHighlight.width > 5 && currentHighlight.height > 5) {
+      const newHighlighter: HighlighterElement = {
+        id: Date.now().toString(),
+        x: currentHighlight.x,
+        y: currentHighlight.y,
+        width: currentHighlight.width,
+        height: currentHighlight.height,
+        color: selectedHighlighterColor,
+        opacity: 0.3
+      }
+      
+      onAddHighlighter?.(newHighlighter)
+    }
+    
+    setIsDrawingHighlight(false)
+    setCurrentHighlight({ x: 0, y: 0, width: 0, height: 0 })
+  }, [isDrawingHighlight, isHighlighterMode, currentHighlight, selectedHighlighterColor, onAddHighlighter])
+
 
 
   // const handleScoreInfoMouseMove = useCallback(
@@ -491,6 +627,8 @@ const ScoreSheet: React.FC<ScoreSheetProps> = ({
 
   const placeNotation = useCallback(
     (mappedNotation: Notation, customX?: number, customY?: number) => {
+      console.log('placeNotation called with:', { mappedNotation, customX, customY })
+      console.log('Current state:', { nextNotePosition, currentKeyboardLineY, currentKeyboardLineIndex })
       let finalX = customX ?? nextNotePosition
       let finalY = customY ?? currentKeyboardLineY
 
@@ -504,7 +642,9 @@ const ScoreSheet: React.FC<ScoreSheetProps> = ({
           staveIndex: 0,
           octave: 4,
         }
+        console.log('Calling onAddNote with:', newNote)
         onAddNote(newNote)
+        console.log('onAddNote called successfully')
         
         // Update cursor position to after the placed note
         setNextNotePosition(finalX + NOTATION_KEYBOARD_X_INCREMENT)
@@ -540,6 +680,7 @@ const ScoreSheet: React.FC<ScoreSheetProps> = ({
         staveIndex: 0,
         octave: 4,
       }
+      console.log('Calling onAddNote with (keyboard):', newNote)
       onAddNote(newNote)
 
       setNextNotePosition(finalX + NOTATION_KEYBOARD_X_INCREMENT)
@@ -556,22 +697,54 @@ const ScoreSheet: React.FC<ScoreSheetProps> = ({
 
   const handleKeyPress = useCallback(
     (event: KeyboardEvent) => {
+      console.log('Key pressed:', event.key, 'Keyboard enabled:', keyboardEnabled)
+      
       if (
         !keyboardEnabled ||
         showSettingsDropdown ||
         showKeyboardHelp ||
         showToolsDropdown ||
         activeTool !== "none" ||
-        showTextDialog
-      )
+        showTextDialog ||
+        showLyricsDialog ||
+        isLyricsMode
+      ) {
+        console.log('Key press blocked by conditions:', {
+          keyboardEnabled,
+          showSettingsDropdown,
+          showKeyboardHelp,
+          showToolsDropdown,
+          activeTool,
+          showTextDialog,
+          showLyricsDialog,
+          isLyricsMode
+        })
         return
+      }
       const target = event.target as HTMLElement
       if (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.tagName === "SELECT") {
+        console.log('Key press blocked by target element:', target.tagName)
         return
       }
 
       const key = event.key
       const mappedNotation = getNotationByKey(key)
+      console.log('Mapped notation for key:', key, mappedNotation)
+
+      // Lyrics shortcut (Ctrl+L)
+      if ((event.ctrlKey || event.metaKey) && key === 'l') {
+        event.preventDefault()
+        event.stopPropagation()
+        if (selectedNoteId) {
+          setSelectedNoteForLyrics(selectedNoteId)
+          const note = currentPage.notes.find(n => n.id === selectedNoteId)
+          if (note) {
+            setLyricsDialogPosition({ x: note.x, y: note.y + 50 })
+            setShowLyricsDialog(true)
+          }
+        }
+        return
+      }
 
       if (key === "Backspace" || key === "Delete") {
         event.preventDefault()
@@ -600,7 +773,10 @@ const ScoreSheet: React.FC<ScoreSheetProps> = ({
       if (mappedNotation) {
         event.preventDefault()
         event.stopPropagation()
+        console.log('Calling placeNotation with:', mappedNotation)
         placeNotation(mappedNotation)
+      } else {
+        console.log('No notation mapped for key:', key)
       }
     },
     [
@@ -610,6 +786,10 @@ const ScoreSheet: React.FC<ScoreSheetProps> = ({
       showToolsDropdown,
       activeTool,
       showTextDialog,
+      showLyricsDialog,
+      isLyricsMode,
+      selectedNoteId,
+      currentPage.notes,
       deleteLastNote,
       placeNotation,
       setNextNotePosition,
@@ -658,6 +838,18 @@ const ScoreSheet: React.FC<ScoreSheetProps> = ({
     if (isTextMode) {
       setTextDialogPosition({ x, y })
       setShowTextDialog(true)
+      return
+    }
+
+    if (isLyricsMode) {
+      // In lyrics mode, clicking anywhere will show the lyrics dialog
+      setLyricsDialogPosition({ x, y })
+      setShowLyricsDialog(true)
+      return
+    }
+
+    if (isHighlighterMode) {
+      // In highlighter mode, don't handle clicks
       return
     }
 
@@ -710,7 +902,7 @@ const ScoreSheet: React.FC<ScoreSheetProps> = ({
 
   // Handle mouse move to update cursor position for note placement
   const handleNotePlacementMouseMove = useCallback((event: React.MouseEvent<HTMLDivElement>) => {
-    if (activeTool !== "none" || !selectedNotation || isTextMode || selectedArticulation || keyboardEnabled || midiEnabled) {
+    if (activeTool !== "none" || !selectedNotation || isTextMode || isLyricsMode || selectedArticulation || keyboardEnabled || midiEnabled) {
       return
     }
 
@@ -730,7 +922,7 @@ const ScoreSheet: React.FC<ScoreSheetProps> = ({
     }, 0)
     
     setCurrentKeyboardLineIndex(closestLineIndex)
-  }, [activeTool, selectedNotation, isTextMode, selectedArticulation, keyboardEnabled, midiEnabled])
+  }, [activeTool, selectedNotation, isTextMode, isLyricsMode, selectedArticulation, keyboardEnabled, midiEnabled])
 
   const handleAddText = () => {
     if (!newTextContent.trim()) return
@@ -753,6 +945,24 @@ const ScoreSheet: React.FC<ScoreSheetProps> = ({
     setNewTextBold(false)
     setNewTextItalic(false)
     setNewTextUnderline(false)
+  }
+
+  const handleAddLyrics = () => {
+    if (!newLyricsContent.trim()) return
+
+    const newLyricElement: LyricElement = {
+      id: Date.now().toString(),
+      noteId: selectedNoteForLyrics || "", // Can be empty if no specific note is selected
+      text: newLyricsContent,
+      x: lyricsDialogPosition.x,
+      y: lyricsDialogPosition.y,
+      fontSize: 14,
+    }
+
+    onAddLyric?.(newLyricElement)
+    setShowLyricsDialog(false)
+    setNewLyricsContent("")
+    setSelectedNoteForLyrics(null)
   }
 
   const drawLine = useCallback((ctx: CanvasRenderingContext2D, line: { x: number; y: number }[]) => {
@@ -917,13 +1127,16 @@ const ScoreSheet: React.FC<ScoreSheetProps> = ({
     if (isDraggingNote) return "grabbing"
     if (draggedTextId) return "grabbing"
     if (draggedArticulationId) return "grabbing"
+    if (draggedLyricId) return "grabbing"
     if (activeTool === "pen") return "crosshair"
     if (activeTool === "eraser") return 'url("/placeholder.svg?width=24&height=24"), auto'
     if (isTextMode) return "text"
+    if (isLyricsMode) return "text"
+    if (isHighlighterMode) return "crosshair"
     if (selectedArticulation) return "crosshair"
     if (selectedNotation && activeTool === "none" && !keyboardEnabled && !midiEnabled) return "crosshair"
     return "default"
-  }, [activeTool, selectedNotation, keyboardEnabled, midiEnabled, isTextMode, selectedArticulation, isDraggingNote, draggedTextId, draggedArticulationId])
+  }, [activeTool, selectedNotation, keyboardEnabled, midiEnabled, isTextMode, isLyricsMode, isHighlighterMode, selectedArticulation, isDraggingNote, draggedTextId, draggedArticulationId, draggedLyricId])
 
   useEffect(() => {
     if (midiEnabled) {
@@ -1007,7 +1220,7 @@ const ScoreSheet: React.FC<ScoreSheetProps> = ({
       // setLastMidiTime({})
       setMidiInputs([])
     }
-  }, [midiEnabled, handleMidiMessage])
+  }, [midiEnabled, handleMidiMessage, midiInputs])
 
   // Event listeners setup
   useEffect(() => {
@@ -1039,7 +1252,7 @@ const ScoreSheet: React.FC<ScoreSheetProps> = ({
       setNextNotePosition(INITIAL_KEYBOARD_NOTE_X_POSITION)
       setCurrentKeyboardLineIndex(0)
     }
-  }, [currentPage.notes]) // Depend on the entire notes array for proper updates
+  }, [currentPage.notes.length]) // Only depend on the length to prevent infinite loops
 
   useEffect(() => {
     if (keyboardEnabled) {
@@ -1239,6 +1452,7 @@ const ScoreSheet: React.FC<ScoreSheetProps> = ({
                       Reset Position
                     </button>
 
+
                     <div className="my-2 h-px bg-gray-200" />
                     <div className="px-2 py-1 text-sm font-semibold text-gray-700">Drawing Tools</div>
                     <div className="my-1 h-px bg-gray-200" />
@@ -1286,10 +1500,15 @@ const ScoreSheet: React.FC<ScoreSheetProps> = ({
                 <Music className="w-3 h-3" />
                 MIDI
               </button>
+
+
               {/* Undo/Redo buttons - Stacked vertically */}
               <div className="flex flex-col gap-1">
                 <button
-                  onClick={onUndo}
+                  onClick={() => {
+                    console.log('Undo clicked - canUndo:', canUndo)
+                    onUndo()
+                  }}
                   disabled={!canUndo}
                   className="flex items-center gap-1 px-2.5 py-1.5 bg-gray-600 text-white rounded-md hover:bg-gray-700 transition-all duration-200 text-xs font-medium disabled:opacity-50 disabled:cursor-not-allowed"
                   title="Undo (Ctrl+Z)"
@@ -1298,7 +1517,10 @@ const ScoreSheet: React.FC<ScoreSheetProps> = ({
                   Undo
                 </button>
                 <button
-                  onClick={onRedo}
+                  onClick={() => {
+                    console.log('Redo clicked - canRedo:', canRedo)
+                    onRedo()
+                  }}
                   disabled={!canRedo}
                   className="flex items-center gap-1 px-2.5 py-1.5 bg-gray-600 text-white rounded-md hover:bg-gray-700 transition-all duration-200 text-xs font-medium disabled:opacity-50 disabled:cursor-not-allowed"
                   title="Redo (Ctrl+Y)"
@@ -1315,6 +1537,8 @@ const ScoreSheet: React.FC<ScoreSheetProps> = ({
         {/* Status Banner */}
         {((keyboardEnabled || midiEnabled) && activeTool === "none") ||
           isTextMode ||
+          isLyricsMode ||
+          isHighlighterMode ||
           selectedArticulation ||
           (selectedNotation && !keyboardEnabled && !midiEnabled) ? (
             <div className="mb-4 bg-blue-50 border border-blue-200 rounded-lg p-3">
@@ -1323,21 +1547,27 @@ const ScoreSheet: React.FC<ScoreSheetProps> = ({
                   {keyboardEnabled && <Keyboard className="w-4 h-4" />}
                   {midiEnabled && <Music className="w-4 h-4" />}
                   {isTextMode && <Type className="w-4 h-4" />}
+                  {isLyricsMode && <Music className="w-4 h-4" />}
+                  {isHighlighterMode && <span className="text-lg">🎨</span>}
                   {selectedArticulation && <span className="text-lg">♪</span>}
                   {selectedNotation && !keyboardEnabled && !midiEnabled && <Music className="w-4 h-4" />}
                   <span className="font-medium">
                     {scoreMode === 'dnr' ? '[DNR Mode] ' : ''}
                     {isTextMode
                       ? "Text Mode Active - Click anywhere to add text"
-                      : selectedArticulation
-                        ? `Articulation Mode Active - ${selectedArticulation}`
-                        : selectedNotation && !keyboardEnabled && !midiEnabled
-                          ? "Note Placement Mode Active - Click anywhere to place notes, click on notes to delete"
-                          : keyboardEnabled && midiEnabled
-                            ? "Keyboard & MIDI Modes Active - Press Backspace/Delete to delete last note, click notes to select and drag"
-                            : keyboardEnabled
-                              ? "Keyboard Mode Active - Press Backspace/Delete to delete last note, click notes to select and drag"
-                              : "MIDI Mode Active - Click notes to select and drag"}
+                      : isLyricsMode
+                        ? "Lyrics Mode Active - Click anywhere to add lyrics"
+                        : isHighlighterMode
+                          ? "Highlighter Mode Active - Click and drag to highlight areas"
+                          : selectedArticulation
+                            ? `Articulation Mode Active - ${selectedArticulation}`
+                            : selectedNotation && !keyboardEnabled && !midiEnabled
+                              ? "Note Placement Mode Active - Click anywhere to place notes, click on notes to delete"
+                              : keyboardEnabled && midiEnabled
+                                ? "Keyboard & MIDI Modes Active - Press Backspace/Delete to delete last note, click notes to select and drag"
+                                : keyboardEnabled
+                                  ? "Keyboard Mode Active - Press Backspace/Delete to delete last note, click notes to select and drag"
+                                  : "MIDI Mode Active - Click notes to select and drag"}
                   </span>
                   <span className="text-gray-500 text-sm ml-4">
                     Measure {getCurrentMeasureInfo().measureNumber}, Beat {getCurrentMeasureInfo().beatNumber}/{getCurrentMeasureInfo().totalBeats}
@@ -1369,7 +1599,7 @@ const ScoreSheet: React.FC<ScoreSheetProps> = ({
         >
           {/* Background Image */}
           <img
-            src={scoreMode === 'dnr' ? "images/dnr-background.jpg" : "images/DNGLines.jpg"}
+            src={scoreMode === 'dnr' ? "/images/dnr-background.jpg" : "/images/DNGLines.jpg"}
             alt={`${scoreMode === 'dnr' ? 'DNR' : 'Music'} Scoresheet Background`}
             style={{
               position: "absolute",
@@ -1424,25 +1654,34 @@ const ScoreSheet: React.FC<ScoreSheetProps> = ({
           <div
             className="absolute inset-0 z-10"
             onClick={activeTool === "none" ? handleImageClick : undefined}
-            onMouseDown={handleMouseDown}
+            onMouseDown={(e) => {
+              handleMouseDown(e)
+              handleHighlighterMouseDown(e)
+            }}
             onMouseMove={(e) => {
               handleDrawingMouseMove(e)
               handleNotePlacementMouseMove(e)
               handleNoteMouseMove(e)
               handleTextMouseMove(e)
               handleArticulationMouseMove(e)
+              handleLyricMouseMove(e)
+              handleHighlighterMouseMove(e)
             }}
             onMouseUp={() => {
               handleMouseUp()
               handleNoteMouseUp()
               handleTextMouseUp()
               handleArticulationMouseUp()
+              handleLyricMouseUp()
+              handleHighlighterMouseUp()
             }}
             onMouseLeave={() => {
               handleMouseUp()
               handleNoteMouseUp()
               handleTextMouseUp()
               handleArticulationMouseUp()
+              handleLyricMouseUp()
+              handleHighlighterMouseUp()
             }}
             style={{
               cursor: getCursorStyle(),
@@ -1473,14 +1712,21 @@ const ScoreSheet: React.FC<ScoreSheetProps> = ({
                 onMouseDown={(e) => {
                   e.stopPropagation()
                   // Only start drag if not in note placement mode
-                  if (!selectedNotation || activeTool !== "none" || isTextMode || selectedArticulation || keyboardEnabled || midiEnabled) {
+                  if (!selectedNotation || activeTool !== "none" || isTextMode || isLyricsMode || selectedArticulation || keyboardEnabled || midiEnabled) {
                     handleNoteMouseDown(e, placedNote.id)
                   }
                 }}
                 onClick={(e) => {
                   e.stopPropagation()
+                  // In lyrics mode, select the note for lyrics
+                  if (isLyricsMode) {
+                    setSelectedNoteForLyrics(placedNote.id)
+                    setLyricsDialogPosition({ x: placedNote.x, y: placedNote.y + 50 })
+                    setShowLyricsDialog(true)
+                    return
+                  }
                   // Delete note on click if in note placement mode
-                  if (selectedNotation && activeTool === "none" && !isTextMode && !selectedArticulation && !keyboardEnabled && !midiEnabled) {
+                  if (selectedNotation && activeTool === "none" && !isTextMode && !isLyricsMode && !selectedArticulation && !keyboardEnabled && !midiEnabled) {
                     onRemoveNote(placedNote.id)
                   }
                 }}
@@ -1560,6 +1806,46 @@ const ScoreSheet: React.FC<ScoreSheetProps> = ({
               </div>
             ))}
 
+            {/* Lyrics elements */}
+            {lyricElements.map((lyricElement) => (
+              <div
+                key={lyricElement.id}
+                className="absolute group z-20 select-none"
+                style={{
+                  left: `${lyricElement.x}px`,
+                  top: `${lyricElement.y}px`,
+                  fontSize: `${lyricElement.fontSize}px`,
+                  cursor: draggedLyricId === lyricElement.id ? "grabbing" : "grab",
+                  zIndex: draggedLyricId === lyricElement.id ? 30 : 20,
+                }}
+                onMouseDown={(e) => handleLyricMouseDown(e, lyricElement.id)}
+                onClick={(e) => {
+                  e.stopPropagation()
+                  // Select the note this lyric belongs to
+                  const noteIndex = currentPage.notes.findIndex(note => note.id === lyricElement.noteId)
+                  if (noteIndex !== -1) {
+                    setSelectedNoteId(lyricElement.noteId)
+                    setCursorToNote(noteIndex)
+                  }
+                }}
+              >
+                <div className="relative">
+                  <span className="text-blue-600 font-medium pointer-events-none">{lyricElement.text}</span>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      onRemoveLyric?.(lyricElement.id)
+                    }}
+                    title="Delete lyrics"
+                    aria-label="Delete lyrics"
+                    className="absolute -top-2 -right-2 w-5 h-5 bg-red-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition-all duration-300 flex items-center justify-center text-xs font-bold shadow-lg hover:bg-red-600"
+                  >
+                    &times;
+                  </button>
+                </div>
+              </div>
+            ))}
+
             {/* Articulation elements */}
             {articulationElements.map((articulation) => (
               <div
@@ -1624,7 +1910,7 @@ const ScoreSheet: React.FC<ScoreSheetProps> = ({
             ))}
 
             {/* Next note position indicator */}
-            {(keyboardEnabled || midiEnabled) && activeTool === "none" && !isTextMode && !selectedArticulation && (
+            {(keyboardEnabled || midiEnabled) && activeTool === "none" && !isTextMode && !isLyricsMode && !selectedArticulation && (
               <div
                 className="absolute w-px h-6 bg-blue-400 opacity-100 animate-pulse z-20 translate-y-1/2"
                 style={{
@@ -1645,8 +1931,21 @@ const ScoreSheet: React.FC<ScoreSheetProps> = ({
               />
             )}
 
+            {/* Blinking cursor indicator */}
+            {cursorPosition.isVisible && (
+              <div
+                className={`absolute w-1 h-8 bg-red-500 z-30 pointer-events-none transition-opacity duration-100 ${
+                  isBlinking ? 'opacity-100' : 'opacity-0'
+                }`}
+                style={{
+                  left: `${cursorPosition.x}px`,
+                  top: `${cursorPosition.y - 16}px`,
+                }}
+              />
+            )}
+
             {/* Note preview at cursor position */}
-            {selectedNotation && activeTool === "none" && !isTextMode && !selectedArticulation && !keyboardEnabled && !midiEnabled && (
+            {selectedNotation && activeTool === "none" && !isTextMode && !isLyricsMode && !selectedArticulation && !keyboardEnabled && !midiEnabled && (
               <div
                 className="absolute z-20 pointer-events-none opacity-50"
                 style={{
@@ -1661,6 +1960,38 @@ const ScoreSheet: React.FC<ScoreSheetProps> = ({
                   className="w-[72px] h-[72px] object-contain"
                 />
               </div>
+            )}
+
+            {/* Highlighter elements */}
+            {highlighterElements.map((highlighter) => (
+              <div
+                key={highlighter.id}
+                className="absolute z-15 pointer-events-none"
+                style={{
+                  left: `${highlighter.x}px`,
+                  top: `${highlighter.y}px`,
+                  width: `${highlighter.width}px`,
+                  height: `${highlighter.height}px`,
+                  backgroundColor: highlighter.color,
+                  opacity: highlighter.opacity,
+                  borderRadius: '4px',
+                }}
+              />
+            ))}
+
+            {/* Current highlight preview */}
+            {isDrawingHighlight && currentHighlight.width > 0 && currentHighlight.height > 0 && (
+              <div
+                className="absolute z-25 pointer-events-none border-2 border-dashed"
+                style={{
+                  left: `${currentHighlight.x}px`,
+                  top: `${currentHighlight.y}px`,
+                  width: `${currentHighlight.width}px`,
+                  height: `${currentHighlight.height}px`,
+                  borderColor: selectedHighlighterColor,
+                  backgroundColor: `${selectedHighlighterColor}20`,
+                }}
+              />
             )}
           </div>
         </div>
@@ -1758,6 +2089,67 @@ const ScoreSheet: React.FC<ScoreSheetProps> = ({
                   </button>
                   <button
                     onClick={() => setShowTextDialog(false)}
+                    className="flex-1 bg-gray-300 text-gray-700 py-2 px-4 rounded-lg hover:bg-gray-400 transition-all duration-200 font-medium"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Lyrics Dialog Modal */}
+      {showLyricsDialog && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full border border-gray-200">
+            <div className="p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">
+                  <Music className="w-5 h-5" />
+                  Add Lyrics
+                </h2>
+                <button
+                  onClick={() => setShowLyricsDialog(false)}
+                  className="text-gray-500 hover:text-gray-700 text-2xl font-bold"
+                >
+                  &times;
+                </button>
+              </div>
+
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Lyrics Text</label>
+                  <input
+                    type="text"
+                    value={newLyricsContent}
+                    onChange={(e) => setNewLyricsContent(e.target.value)}
+                    placeholder="Enter lyrics..."
+                    className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    autoFocus
+                  />
+                  {selectedNoteForLyrics ? (
+                    <p className="text-xs text-green-600 mt-1">
+                      ✓ Lyrics will be attached to the selected note
+                    </p>
+                  ) : (
+                    <p className="text-xs text-gray-500 mt-1">
+                      Note: This lyric will be placed at the clicked position. To attach to a specific note, click on a note first.
+                    </p>
+                  )}
+                </div>
+
+                <div className="flex gap-3 pt-4">
+                  <button
+                    onClick={handleAddLyrics}
+                    disabled={!newLyricsContent.trim()}
+                    className="flex-1 bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed font-medium"
+                  >
+                    Add Lyrics
+                  </button>
+                  <button
+                    onClick={() => setShowLyricsDialog(false)}
                     className="flex-1 bg-gray-300 text-gray-700 py-2 px-4 rounded-lg hover:bg-gray-400 transition-all duration-200 font-medium"
                   >
                     Cancel
