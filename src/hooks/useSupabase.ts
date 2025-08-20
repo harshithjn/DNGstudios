@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { notePagesApi, notesApi } from '../lib/supabase'
 import { type Notation, getNotationBySymbol } from '../data/notations'
-import type { TextElement, ArticulationElement, LyricElement, HighlighterElement } from '../App'
+import type { TextElement, ArticulationElement, LyricElement, HighlighterElement, DefaultBarLine } from '../App'
 
 export interface ProjectSummary {
   id: string
@@ -38,6 +38,7 @@ export interface ScorePage {
   articulationElements?: ArticulationElement[]
   lyricElements?: LyricElement[]
   highlighterElements?: HighlighterElement[]
+  defaultBarLines?: DefaultBarLine[]
 }
 
 export const useSupabase = () => {

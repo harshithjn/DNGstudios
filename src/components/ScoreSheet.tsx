@@ -19,7 +19,7 @@ import {
 import { notations, getNotationByKey, type Notation } from "../data/notations"
 import html2canvas from "html2canvas"
 import jsPDF from "jspdf"
-import type { TextElement, ArticulationElement, LyricElement, HighlighterElement } from "../App"
+import type { TextElement, ArticulationElement, LyricElement, HighlighterElement, DefaultBarLine } from "../App"
 
 import PianoComponent from "./Piano"
 import type { ScoreMode } from "./ModeSelector"
@@ -74,6 +74,10 @@ interface ScoreSheetProps {
   onUpdateLyric?: (id: string, updates: Partial<LyricElement>) => void
   highlighterElements?: HighlighterElement[]
   onAddHighlighter?: (highlighter: HighlighterElement) => void
+  defaultBarLines?: DefaultBarLine[]
+  onAddDefaultBarLine?: (defaultBarLine: DefaultBarLine) => void
+  onRemoveDefaultBarLine?: (id: string) => void
+  onUpdateDefaultBarLine?: (id: string, updates: Partial<DefaultBarLine>) => void
 
   canUndo: boolean
   canRedo: boolean
@@ -203,6 +207,10 @@ const ScoreSheet: React.FC<ScoreSheetProps> = ({
   onUpdateLyric,
   highlighterElements = [],
   onAddHighlighter,
+  defaultBarLines = [],
+  onAddDefaultBarLine,
+  onRemoveDefaultBarLine,
+  onUpdateDefaultBarLine,
 
 
 
@@ -235,6 +243,8 @@ const ScoreSheet: React.FC<ScoreSheetProps> = ({
   const [lyricsDialogPosition, setLyricsDialogPosition] = useState({ x: 0, y: 0 })
   const [newLyricsContent, setNewLyricsContent] = useState("")
   const [selectedNoteForLyrics, setSelectedNoteForLyrics] = useState<string | null>(null)
+  const [showDefaultBarLinesDialog, setShowDefaultBarLinesDialog] = useState(false)
+  const [selectedLineIndex, setSelectedLineIndex] = useState<number | null>(null)
 
   // Cursor navigation
   const {
@@ -322,6 +332,10 @@ const ScoreSheet: React.FC<ScoreSheetProps> = ({
   // Drag state for lyrics
   const [draggedLyricId, setDraggedLyricId] = useState<string | null>(null)
   const [lyricDragOffset, setLyricDragOffset] = useState({ x: 0, y: 0 })
+
+  // Drag state for default bar lines
+  const [draggedDefaultBarLineId, setDraggedDefaultBarLineId] = useState<string | null>(null)
+  const [defaultBarLineDragOffset, setDefaultBarLineDragOffset] = useState({ x: 0, y: 0 })
 
   // Highlighter state
   const [isDrawingHighlight, setIsDrawingHighlight] = useState(false)
@@ -521,6 +535,45 @@ const ScoreSheet: React.FC<ScoreSheetProps> = ({
   const handleLyricMouseUp = useCallback(() => {
     setDraggedLyricId(null)
     setLyricDragOffset({ x: 0, y: 0 })
+  }, [])
+
+  // Default bar line handlers
+  const handleDefaultBarLineMouseDown = useCallback(
+    (e: React.MouseEvent, defaultBarLineId: string) => {
+      e.preventDefault()
+      e.stopPropagation()
+      const defaultBarLine = defaultBarLines.find((dbl) => dbl.id === defaultBarLineId)
+      if (!defaultBarLine) return
+
+      setDraggedDefaultBarLineId(defaultBarLineId)
+      setDefaultBarLineDragOffset({
+        x: e.clientX - defaultBarLine.x,
+        y: e.clientY - 0, // Y position is fixed based on line index
+      })
+    },
+    [defaultBarLines],
+  )
+
+  const handleDefaultBarLineMouseMove = useCallback(
+    (e: React.MouseEvent) => {
+      if (!draggedDefaultBarLineId) return
+      e.preventDefault()
+
+      const newX = e.clientX - defaultBarLineDragOffset.x
+      
+      // Constrain to canvas boundaries
+      const canvasWidth = RENDERED_SCORESHEET_WIDTH
+      const padding = 50
+      const constrainedX = Math.max(padding, Math.min(newX, canvasWidth - padding))
+
+      onUpdateDefaultBarLine?.(draggedDefaultBarLineId, { x: constrainedX })
+    },
+    [draggedDefaultBarLineId, defaultBarLineDragOffset, onUpdateDefaultBarLine],
+  )
+
+  const handleDefaultBarLineMouseUp = useCallback(() => {
+    setDraggedDefaultBarLineId(null)
+    setDefaultBarLineDragOffset({ x: 0, y: 0 })
   }, [])
 
   // Highlighter handlers
@@ -1142,6 +1195,7 @@ const ScoreSheet: React.FC<ScoreSheetProps> = ({
     if (draggedTextId) return "grabbing"
     if (draggedArticulationId) return "grabbing"
     if (draggedLyricId) return "grabbing"
+    if (draggedDefaultBarLineId) return "grabbing"
     if (activeTool === "pen") return "crosshair"
     if (activeTool === "eraser") return 'url("/placeholder.svg?width=24&height=24"), auto'
     if (isTextMode) return "text"
@@ -1150,7 +1204,7 @@ const ScoreSheet: React.FC<ScoreSheetProps> = ({
     if (selectedArticulation) return "crosshair"
     if (selectedNotation && activeTool === "none" && !keyboardEnabled && !midiEnabled) return "crosshair"
     return "default"
-  }, [activeTool, selectedNotation, keyboardEnabled, midiEnabled, isTextMode, isLyricsMode, isHighlighterMode, selectedArticulation, isDraggingNote, draggedTextId, draggedArticulationId, draggedLyricId])
+  }, [activeTool, selectedNotation, keyboardEnabled, midiEnabled, isTextMode, isLyricsMode, isHighlighterMode, selectedArticulation, isDraggingNote, draggedTextId, draggedArticulationId, draggedLyricId, draggedDefaultBarLineId])
 
   useEffect(() => {
     if (midiEnabled) {
@@ -1471,6 +1525,7 @@ const ScoreSheet: React.FC<ScoreSheetProps> = ({
                     </button>
 
 
+
                     <div className="my-2 h-px bg-gray-200" />
                     <div className="px-2 py-1 text-sm font-semibold text-gray-700">Drawing Tools</div>
                     <div className="my-1 h-px bg-gray-200" />
@@ -1683,6 +1738,7 @@ const ScoreSheet: React.FC<ScoreSheetProps> = ({
               handleTextMouseMove(e)
               handleArticulationMouseMove(e)
               handleLyricMouseMove(e)
+              handleDefaultBarLineMouseMove(e)
               handleHighlighterMouseMove(e)
             }}
             onMouseUp={() => {
@@ -1691,6 +1747,7 @@ const ScoreSheet: React.FC<ScoreSheetProps> = ({
               handleTextMouseUp()
               handleArticulationMouseUp()
               handleLyricMouseUp()
+              handleDefaultBarLineMouseUp()
               handleHighlighterMouseUp()
             }}
             onMouseLeave={() => {
@@ -1699,6 +1756,7 @@ const ScoreSheet: React.FC<ScoreSheetProps> = ({
               handleTextMouseUp()
               handleArticulationMouseUp()
               handleLyricMouseUp()
+              handleDefaultBarLineMouseUp()
               handleHighlighterMouseUp()
             }}
             style={{
@@ -1926,6 +1984,65 @@ const ScoreSheet: React.FC<ScoreSheetProps> = ({
                 </div>
               </div>
             ))}
+
+            {/* Default bar lines */}
+            {defaultBarLines.map((defaultBarLine) => {
+              const yPosition = KEYBOARD_LINE_Y_POSITIONS[defaultBarLine.lineIndex]
+              return (
+                <div
+                  key={defaultBarLine.id}
+                  className="absolute group z-15 select-none"
+                  style={{
+                    left: `${defaultBarLine.x}px`,
+                    top: `${yPosition}px`,
+                    transform: "translateX(-50%)",
+                    cursor: draggedDefaultBarLineId === defaultBarLine.id ? "grabbing" : "grab",
+                  }}
+                  onMouseDown={(e) => handleDefaultBarLineMouseDown(e, defaultBarLine.id)}
+                  onMouseMove={handleDefaultBarLineMouseMove}
+                  onMouseUp={handleDefaultBarLineMouseUp}
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    setSelectedLineIndex(defaultBarLine.lineIndex)
+                    setShowDefaultBarLinesDialog(true)
+                  }}
+                >
+                  <div className="relative">
+                    <div 
+                      className="flex items-center justify-center"
+                      style={{ height: 65 }}
+                    >
+                      <span 
+                        className="text-gray-800 font-light drop-shadow-md"
+                        style={{ 
+                          fontSize: '65px',
+                          lineHeight: '1',
+                          display: 'block',
+                        }}
+                      >
+                        {defaultBarLine.count === 1 ? '|' : '||'}
+                      </span>
+                    </div>
+                    
+                    {/* Delete button */}
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        onRemoveDefaultBarLine?.(defaultBarLine.id)
+                      }}
+                      className="absolute -top-2 -right-2 w-5 h-5 bg-red-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition-all duration-300 flex items-center justify-center text-xs font-bold shadow-lg hover:bg-red-600"
+                    >
+                      &times;
+                    </button>
+                    
+                    {/* Count indicator */}
+                    <div className="absolute -top-2 -left-2 w-5 h-5 bg-blue-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition-all duration-300 flex items-center justify-center text-xs font-bold shadow-lg">
+                      {defaultBarLine.count}
+                    </div>
+                  </div>
+                </div>
+              )
+            })}
 
             {/* Next note position indicator */}
             {(keyboardEnabled || midiEnabled) && activeTool === "none" && !isTextMode && !isLyricsMode && !selectedArticulation && (
@@ -2171,6 +2288,112 @@ const ScoreSheet: React.FC<ScoreSheetProps> = ({
                     className="flex-1 bg-gray-300 text-gray-700 py-2 px-4 rounded-lg hover:bg-gray-400 transition-all duration-200 font-medium"
                   >
                     Cancel
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Default Bar Lines Dialog Modal */}
+      {showDefaultBarLinesDialog && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full border border-gray-200">
+            <div className="p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">
+                  <span className="text-lg">|</span>
+                  Default Bar Lines Configuration
+                </h2>
+                <button
+                  onClick={() => setShowDefaultBarLinesDialog(false)}
+                  className="text-gray-500 hover:text-gray-700 text-2xl font-bold"
+                >
+                  &times;
+                </button>
+              </div>
+
+              <div className="space-y-4">
+                <p className="text-sm text-gray-600">
+                  Configure default bar lines for each of the 11 keyboard lines. You can set the number of bar lines and their horizontal position.
+                </p>
+                
+                <div className="grid grid-cols-1 gap-4 max-h-96 overflow-y-auto">
+                  {KEYBOARD_LINE_Y_POSITIONS.map((yPosition, index) => {
+                    const existingBarLine = defaultBarLines.find(dbl => dbl.lineIndex === index)
+                    return (
+                      <div key={index} className="flex items-center gap-4 p-3 border border-gray-200 rounded-lg">
+                        <div className="flex-1">
+                          <label className="block text-sm font-medium text-gray-700 mb-1">
+                            Line {index + 1} (Y: {yPosition}px)
+                          </label>
+                          <div className="flex items-center gap-2">
+                            <input
+                              type="number"
+                              min="0"
+                              max="10"
+                              value={existingBarLine?.count || 0}
+                              onChange={(e) => {
+                                const count = parseInt(e.target.value) || 0
+                                if (count > 0) {
+                                  if (existingBarLine) {
+                                    onUpdateDefaultBarLine?.(existingBarLine.id, { count })
+                                  } else {
+                                    onAddDefaultBarLine?.({
+                                      id: Date.now().toString(),
+                                      lineIndex: index,
+                                      x: 400, // Default position
+                                      count,
+                                      isVisible: true
+                                    })
+                                  }
+                                } else if (existingBarLine) {
+                                  onRemoveDefaultBarLine?.(existingBarLine.id)
+                                }
+                              }}
+                              className="w-16 p-2 border border-gray-300 rounded text-center"
+                              placeholder="0"
+                            />
+                            <span className="text-sm text-gray-600">bar lines</span>
+                            {existingBarLine && (
+                              <input
+                                type="number"
+                                min="50"
+                                max="800"
+                                value={existingBarLine.x}
+                                onChange={(e) => {
+                                  const x = parseInt(e.target.value) || 400
+                                  onUpdateDefaultBarLine?.(existingBarLine.id, { x })
+                                }}
+                                className="w-20 p-2 border border-gray-300 rounded text-center"
+                                placeholder="X pos"
+                              />
+                            )}
+                            {existingBarLine && (
+                              <span className="text-sm text-gray-600">X position</span>
+                            )}
+                          </div>
+                        </div>
+                        {existingBarLine && (
+                          <button
+                            onClick={() => onRemoveDefaultBarLine?.(existingBarLine.id)}
+                            className="px-3 py-1 bg-red-500 text-white rounded hover:bg-red-600 text-sm"
+                          >
+                            Remove
+                          </button>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+
+                <div className="flex gap-3 pt-4">
+                  <button
+                    onClick={() => setShowDefaultBarLinesDialog(false)}
+                    className="flex-1 bg-gray-300 text-gray-700 py-2 px-4 rounded-lg hover:bg-gray-400 transition-all duration-200 font-medium"
+                  >
+                    Close
                   </button>
                 </div>
               </div>

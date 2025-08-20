@@ -1,12 +1,13 @@
 import { useState, useCallback, useRef, useEffect } from 'react'
 
 import type { PlacedNotation } from './useSupabase'
-import type { TextElement, ArticulationElement } from '../App'
+import type { TextElement, ArticulationElement, DefaultBarLine } from '../App'
 
 export interface HistoryState {
   notes: PlacedNotation[]
   textElements: TextElement[]
   articulationElements: ArticulationElement[]
+  defaultBarLines: DefaultBarLine[]
   timestamp: number
 }
 
