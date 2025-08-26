@@ -69,3 +69,4 @@ notes (id, page_id, notation_key, x_position, y_position, stave_index, octave, s
 #
 
 **After setting up the database, the 400 errors will disappear and all features will work properly!**
+h
