@@ -30,6 +30,8 @@ interface PlacedNotation {
   y: number
   staveIndex: number
   octave: number
+  stemDirection?: 'up' | 'down' // Stem direction for music notation
+  stemLength?: number // Length of the stem in pixels
 }
 
 interface ScorePage {
@@ -70,25 +72,68 @@ interface DNRScoresheetProps {
 
 const A4_WIDTH_PX = 794
 const A4_HEIGHT_PX = 1123
-const INITIAL_KEYBOARD_NOTE_X_POSITION = 170
-const NOTATION_VISUAL_WIDTH = 48
-const NOTATION_KEYBOARD_X_INCREMENT = 50
+const INITIAL_KEYBOARD_NOTE_X_POSITION = 200
+const NOTATION_VISUAL_WIDTH = 60
+const NOTATION_KEYBOARD_X_INCREMENT = 70
 const RENDERED_SCORESHEET_WIDTH = A4_WIDTH_PX * 1.3
 const RENDERED_SCORESHEET_HEIGHT = A4_HEIGHT_PX * 1.3
 
-const KEYBOARD_LINE_Y_POSITIONS = [230, 310, 390, 470, 548, 627, 707, 786, 865, 944, 1023]
+// Improved line spacing for better PDF export
+const KEYBOARD_LINE_Y_POSITIONS = [250, 380, 510, 640, 770, 900, 1030, 1160, 1290, 1420, 1550]
 
 const NOTE_BOUNDARY_LEFT = INITIAL_KEYBOARD_NOTE_X_POSITION
-const NOTE_BOUNDARY_RIGHT = 1000
+const NOTE_BOUNDARY_RIGHT = 1200
+
+// Bar line constants
+const BAR_LINE_WIDTH = 3
+const BAR_LINE_SPACING = 200 // Distance between bar lines
+const BAR_LINE_COLOR = '#000000'
+const BAR_LINE_OPACITY = 0.8
 
 const midiNoteToNotationMap: { [key: number]: string } = {
-  // a-z mapping (C3 to D5) - optimized for faster lookup
-  48: "a", 49: "b", 50: "c", 51: "d", 52: "e", 53: "f", 54: "g", 55: "h", 56: "i", 57: "j",
-  58: "k", 59: "l", 60: "m", 61: "n", 62: "o", 63: "p", 64: "q", 65: "r", 66: "s", 67: "t",
-  68: "u", 69: "v", 70: "w", 71: "x", 72: "y", 73: "z",
-  // A-S mapping (D#5 to A#6) - extended range for better coverage
-  74: "A", 75: "B", 76: "C", 77: "D", 78: "E", 79: "F", 80: "G", 81: "H", 82: "I", 83: "J",
-  84: "K", 85: "L", 86: "M", 87: "N", 88: "O", 89: "P", 90: "Q", 91: "R", 92: "S",
+  // Major notes only - optimized for better PDF export
+  // a, d, g, j, m, p (major white notes)
+  48: "a", // Maguru White
+  51: "d", // Guru White
+  54: "g", // Bindu White
+  57: "j", // Vasu White
+  60: "m", // Praya White
+  63: "p", // Danta White
+  
+  // Time and rhythm notations
+  66: "s", // 2 Times Left
+  67: "t", // 2 Times Right
+  68: "u", // 3 Times Left
+  69: "v", // 3 Times Right
+  70: "w", // 4 Times Left
+  71: "x", // 4 Times Right
+  
+  // Special notations
+  72: "y", // Daro
+  73: "z", // Enjo
+  
+  // Uppercase major notes
+  74: "A", // Lower Octave 1
+  75: "B", // Lower Octave 2
+  76: "C", // Middle Octave
+  77: "D", // Higher Octave 1
+  78: "E", // Higher Octave 2
+  
+  // Special major notations
+  79: "F", // Neredani
+  80: "G", // Dumbidani
+  81: "H", // Pisudani
+  82: "I", // Meludhani
+  83: "J", // Nakalu
+  84: "K", // Bhamini
+  85: "L", // Hindani
+  86: "M", // Mundani
+  87: "N", // Daneottu
+  88: "O", // Chimma
+  89: "P", // Najakath
+  90: "Q", // Cut Nit
+  91: "R", // Usha
+  92: "S", // Nisha
 }
 
 const KEY_SIGNATURE_OPTIONS = [
@@ -179,6 +224,11 @@ const DNRScoresheet: React.FC<DNRScoresheetProps> = ({
   const [resizingArticulationId, setResizingArticulationId] = useState<string | null>(null)
   const [resizeStartY, setResizeStartY] = useState(0)
   const [resizeStartHeight, setResizeStartHeight] = useState(0)
+  
+  // Bar line and stem direction state
+  const [showBarLines, setShowBarLines] = useState(true)
+  const [barLineSpacing, setBarLineSpacing] = useState(BAR_LINE_SPACING)
+  const [selectedStemDirection, setSelectedStemDirection] = useState<'up' | 'down' | null>(null)
 
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const isInteracting = useRef(false)
@@ -422,6 +472,13 @@ const DNRScoresheet: React.FC<DNRScoresheetProps> = ({
         }
       }
 
+      // Ensure proper alignment to grid for better PDF export
+      finalX = Math.round(finalX / 10) * 10
+      finalY = Math.round(finalY / 10) * 10
+
+      // Auto-assign stem direction based on position
+      const stemProps = autoAssignStemDirection({ x: finalX, y: finalY })
+      
       const newNote: PlacedNotation = {
         id: Date.now().toString(),
         notation: mappedNotation,
@@ -429,6 +486,7 @@ const DNRScoresheet: React.FC<DNRScoresheetProps> = ({
         y: finalY,
         staveIndex: 0,
         octave: 4,
+        ...stemProps
       }
       onAddNote(newNote)
 
@@ -443,6 +501,55 @@ const DNRScoresheet: React.FC<DNRScoresheetProps> = ({
       setCurrentKeyboardLineIndex,
     ],
   )
+
+  // Generate bar lines based on time signature and note positions
+  const generateBarLines = useCallback(() => {
+    if (!showBarLines) return []
+    
+    const barLines: Array<{ x: number; y: number; width: number; height: number }> = []
+    const { numerator } = currentPage.timeSignature
+    
+    // Calculate bar line positions based on time signature
+    let currentX = NOTE_BOUNDARY_LEFT
+    const maxX = NOTE_BOUNDARY_RIGHT
+    
+    while (currentX <= maxX) {
+      // Add bar line for each measure
+      barLines.push({
+        x: currentX,
+        y: KEYBOARD_LINE_Y_POSITIONS[0] - 20, // Start above first line
+        width: BAR_LINE_WIDTH,
+        height: KEYBOARD_LINE_Y_POSITIONS[KEYBOARD_LINE_Y_POSITIONS.length - 1] - KEYBOARD_LINE_Y_POSITIONS[0] + 40
+      })
+      
+      // Move to next measure position
+      currentX += barLineSpacing
+    }
+    
+    return barLines
+  }, [showBarLines, currentPage.timeSignature, barLineSpacing])
+
+  // Toggle stem direction for selected note
+  const toggleStemDirection = useCallback((noteId: string) => {
+    const note = currentPage.notes.find(n => n.id === noteId)
+    if (!note) return
+    
+    const newDirection = note.stemDirection === 'up' ? 'down' : 'up'
+    onUpdateNote(noteId, { 
+      stemDirection: newDirection,
+      stemLength: newDirection === 'up' ? 60 : 60 // Same length for both directions
+    })
+  }, [currentPage.notes, onUpdateNote])
+
+  // Auto-assign stem direction based on note position
+  const autoAssignStemDirection = useCallback((note: { x: number; y: number }) => {
+    const middleLine = KEYBOARD_LINE_Y_POSITIONS[Math.floor(KEYBOARD_LINE_Y_POSITIONS.length / 2)]
+    const direction: 'up' | 'down' = note.y < middleLine ? 'down' : 'up'
+    return {
+      stemDirection: direction,
+      stemLength: 60
+    }
+  }, [])
 
   const handleKeyPress = useCallback(
     (event: KeyboardEvent) => {
@@ -462,6 +569,35 @@ const DNRScoresheet: React.FC<DNRScoresheetProps> = ({
 
       const key = event.key
       const mappedNotation = getNotationByKey(key)
+
+      // Stem direction shortcuts
+      if (key === 'ArrowUp' && selectedNoteId) {
+        event.preventDefault()
+        event.stopPropagation()
+        const note = currentPage.notes.find(n => n.id === selectedNoteId)
+        if (note) {
+          onUpdateNote(selectedNoteId, { stemDirection: 'up', stemLength: 60 })
+        }
+        return
+      }
+
+      if (key === 'ArrowDown' && selectedNoteId) {
+        event.preventDefault()
+        event.stopPropagation()
+        const note = currentPage.notes.find(n => n.id === selectedNoteId)
+        if (note) {
+          onUpdateNote(selectedNoteId, { stemDirection: 'down', stemLength: 60 })
+        }
+        return
+      }
+
+      // Bar line toggle shortcut (B key)
+      if (key === 'b' || key === 'B') {
+        event.preventDefault()
+        event.stopPropagation()
+        setShowBarLines(!showBarLines)
+        return
+      }
 
       if (key === "Backspace" || key === "Delete") {
         event.preventDefault()
@@ -1101,6 +1237,35 @@ const DNRScoresheet: React.FC<DNRScoresheetProps> = ({
                     </button>
 
                     <div className="my-2 h-px bg-gray-200" />
+                    <div className="px-2 py-1 text-sm font-semibold text-gray-700">Music Notation</div>
+                    <div className="my-1 h-px bg-gray-200" />
+                    <button
+                      onClick={() => {
+                        setShowBarLines(!showBarLines)
+                        setShowToolsDropdown(false)
+                      }}
+                      className={`flex items-center gap-2 w-full text-left px-2 py-1.5 text-sm rounded-sm ${
+                        showBarLines ? "bg-green-100 text-green-700" : "text-gray-700 hover:bg-gray-100"
+                      }`}
+                    >
+                      <div className="w-3 h-3 flex items-center justify-center">
+                        <div className="w-0.5 h-3 bg-current"></div>
+                      </div>
+                      Bar Lines {showBarLines ? "(On)" : "(Off)"}
+                    </button>
+                    <div className="px-2 py-1 text-xs text-gray-500">
+                      Bar Line Spacing: {barLineSpacing}px
+                    </div>
+                    <input
+                      type="range"
+                      min="100"
+                      max="400"
+                      value={barLineSpacing}
+                      onChange={(e) => setBarLineSpacing(Number(e.target.value))}
+                      className="w-full h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+                    />
+
+                    <div className="my-2 h-px bg-gray-200" />
                     <div className="px-2 py-1 text-sm font-semibold text-gray-700">Drawing Tools</div>
                     <div className="my-1 h-px bg-gray-200" />
                     <button
@@ -1185,6 +1350,8 @@ const DNRScoresheet: React.FC<DNRScoresheetProps> = ({
                   {isTextMode && <Type className="w-4 h-4" />}
                   {selectedArticulation && <span className="text-lg">♪</span>}
                   {selectedNotation && !keyboardEnabled && !midiEnabled && <Music className="w-4 h-4" />}
+                  {showBarLines && <span className="text-lg">|</span>}
+                  {selectedStemDirection && <span className="text-lg">{selectedStemDirection === 'up' ? '↑' : '↓'}</span>}
                   <span className="font-medium">
                     [DNR Mode]{" "}
                     {isTextMode
@@ -1308,6 +1475,22 @@ const DNRScoresheet: React.FC<DNRScoresheetProps> = ({
               style={{ pointerEvents: "none" }}
             />
 
+            {/* Bar Lines */}
+            {showBarLines && generateBarLines().map((barLine, index) => (
+              <div
+                key={`bar-line-${index}`}
+                className="absolute z-10 pointer-events-none"
+                style={{
+                  left: `${barLine.x}px`,
+                  top: `${barLine.y}px`,
+                  width: `${barLine.width}px`,
+                  height: `${barLine.height}px`,
+                  backgroundColor: BAR_LINE_COLOR,
+                  opacity: BAR_LINE_OPACITY,
+                }}
+              />
+            ))}
+
             {/* Placed notations (images) */}
             {currentPage.notes.map((placedNote) => (
               <div
@@ -1318,7 +1501,7 @@ const DNRScoresheet: React.FC<DNRScoresheetProps> = ({
                 style={{
                   left: `${placedNote.x}px`,
                   top: `${placedNote.y}px`,
-                  transform: "translateX(-50%)",
+                  transform: "translate(-50%, -50%)",
                   zIndex: draggedNoteId === placedNote.id ? 30 : 20,
                 }}
                 onMouseDown={(e) => {
@@ -1340,19 +1523,50 @@ const DNRScoresheet: React.FC<DNRScoresheetProps> = ({
                   <img
                     src={placedNote.notation?.image || "/placeholder.svg"}
                     alt={placedNote.notation?.name || "Image"}
-                    className={`w-[72px] h-[72px] object-contain transition-all duration-200 ${
+                    className={`w-[80px] h-[80px] object-contain transition-all duration-200 ${
                       draggedNoteId === placedNote.id 
                         ? 'drop-shadow-2xl scale-105' 
                         : selectedNoteId === placedNote.id
                           ? 'drop-shadow-lg scale-110'
                           : 'drop-shadow-md'
                     }`}
+                    style={{
+                      imageRendering: '-webkit-optimize-contrast'
+                    }}
                   />
+                  {/* Stem rendering */}
+                  {placedNote.stemDirection && (
+                    <div
+                      className="absolute pointer-events-none"
+                      style={{
+                        left: '50%',
+                        top: placedNote.stemDirection === 'up' ? '0%' : '100%',
+                        width: '2px',
+                        height: `${placedNote.stemLength || 60}px`,
+                        backgroundColor: '#000000',
+                        transform: 'translateX(-50%)',
+                        transformOrigin: placedNote.stemDirection === 'up' ? 'bottom' : 'top',
+                      }}
+                    />
+                  )}
                   {/* Drag indicator - only show when selected */}
                   {selectedNoteId === placedNote.id && (
                     <div className="absolute -top-2 -left-2 w-4 h-4 bg-purple-500 text-white rounded-full opacity-100 transition-all duration-300 flex items-center justify-center text-xs font-bold shadow-lg">
                       ⋮⋮
                     </div>
+                  )}
+                  {/* Stem direction toggle button - only show when selected */}
+                  {selectedNoteId === placedNote.id && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        toggleStemDirection(placedNote.id)
+                      }}
+                      className="absolute -top-3 -left-3 w-6 h-6 bg-blue-500 text-white rounded-full opacity-100 transition-all duration-300 flex items-center justify-center text-xs font-bold shadow-lg hover:bg-blue-600"
+                      title={`Toggle stem direction (currently ${placedNote.stemDirection || 'auto'})`}
+                    >
+                      {placedNote.stemDirection === 'up' ? '↑' : placedNote.stemDirection === 'down' ? '↓' : '↕'}
+                    </button>
                   )}
                   {/* Delete button - only show when selected */}
                   {selectedNoteId === placedNote.id && (
@@ -1516,13 +1730,16 @@ const DNRScoresheet: React.FC<DNRScoresheetProps> = ({
                 style={{
                   left: `${nextNotePosition}px`,
                   top: `${currentKeyboardLineY}px`,
-                  transform: "translateX(-50%)",
+                  transform: "translate(-50%, -50%)",
                 }}
               >
                 <img
                   src={selectedNotation.image || "/placeholder.svg"}
                   alt={selectedNotation.name || "Note"}
-                  className="w-[72px] h-[72px] object-contain"
+                  className="w-[80px] h-[80px] object-contain"
+                  style={{
+                    imageRendering: '-webkit-optimize-contrast'
+                  }}
                 />
               </div>
             )}
