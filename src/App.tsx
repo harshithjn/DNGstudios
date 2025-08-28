@@ -31,7 +31,7 @@ export interface TextElement {
 
 export interface ArticulationElement {
   id: string
-  type: string
+  type: string //acive
   name: string
   symbol: string
   x: number
