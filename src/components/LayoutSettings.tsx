@@ -1,7 +1,7 @@
 "use client"
 
 import React, { useState } from "react"
-import { Settings, X } from "lucide-react"
+import { Settings } from "lucide-react"
 
 interface LayoutSettingsProps {
   isOpen: boolean

@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { ArrowRight, Code, Brain, Shield, Star, Users, Play, Music2, User, Mail, Linkedin, X } from 'lucide-react'
+import { ArrowRight, Code, Brain, Shield, Users, Play, User, Mail, Linkedin, X } from 'lucide-react'
 
 interface LandingPageProps {
   onLaunchApp: () => void

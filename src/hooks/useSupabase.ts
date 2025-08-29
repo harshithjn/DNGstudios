@@ -334,6 +334,47 @@ export const useSupabase = () => {
     loadProjects()
   }, [loadProjects])
 
+  // Save project metadata including default bar lines
+  const saveProjectMetadata = useCallback(async (
+    projectId: string,
+    metadata: any
+  ): Promise<boolean> => {
+    try {
+      setError(null)
+      
+      console.log('Saving project metadata:', projectId, metadata)
+      
+      const success = await notePagesApi.saveMetadata(projectId, metadata)
+      if (success) {
+        console.log('Project metadata saved successfully')
+      }
+      return success
+    } catch (err) {
+      console.error('Error saving project metadata:', err)
+      setError('Failed to save project metadata')
+      return false
+    }
+  }, [])
+
+  // Load project metadata including default bar lines
+  const loadProjectMetadata = useCallback(async (
+    projectId: string
+  ): Promise<any> => {
+    try {
+      setError(null)
+      
+      console.log('Loading project metadata:', projectId)
+      
+      const metadata = await notePagesApi.loadMetadata(projectId)
+      console.log('Loaded project metadata:', metadata)
+      return metadata
+    } catch (err) {
+      console.error('Error loading project metadata:', err)
+      setError('Failed to load project metadata')
+      return null
+    }
+  }, [])
+
   return {
     projects,
     loading,
@@ -345,6 +386,8 @@ export const useSupabase = () => {
     saveNotes,
     addNote,
     removeNote,
+    saveProjectMetadata,
+    loadProjectMetadata,
     refreshProjects: loadProjects
   }
 }

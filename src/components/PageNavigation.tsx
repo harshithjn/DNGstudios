@@ -67,7 +67,7 @@ const PageNavigation: React.FC<PageNavigationProps> = ({
         {/* Add Page Button */}
         <button
           onClick={onAddPage}
-          className="ml-2 p-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition-all duration-200 flex items-center gap-1"
+          className="ml-2 p-2 rounded-lg bg-blue-900 text-white hover:bg-blue-800 transition-all duration-200 flex items-center gap-1"
           title="Add new page"
         >
           <Plus className="w-4 h-4" />

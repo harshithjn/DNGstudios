@@ -7,8 +7,6 @@ import {
   Keyboard,
   RotateCcw,
   Download,
-  Pen,
-  Eraser,
   Settings,
   Type,
   Bold,
@@ -30,8 +28,6 @@ interface PlacedNotation {
   y: number
   staveIndex: number
   octave: number
-  stemDirection?: 'up' | 'down' // Stem direction for music notation
-  stemLength?: number // Length of the stem in pixels
 }
 
 interface ScorePage {
@@ -84,11 +80,7 @@ const KEYBOARD_LINE_Y_POSITIONS = [250, 380, 510, 640, 770, 900, 1030, 1160, 129
 const NOTE_BOUNDARY_LEFT = INITIAL_KEYBOARD_NOTE_X_POSITION
 const NOTE_BOUNDARY_RIGHT = 1200
 
-// Bar line constants
-const BAR_LINE_WIDTH = 3
-const BAR_LINE_SPACING = 200 // Distance between bar lines
-const BAR_LINE_COLOR = '#000000'
-const BAR_LINE_OPACITY = 0.8
+
 
 const midiNoteToNotationMap: { [key: number]: string } = {
   // Major notes only - optimized for better PDF export
@@ -197,9 +189,7 @@ const DNRScoresheet: React.FC<DNRScoresheetProps> = ({
   const [newTextBold, setNewTextBold] = useState(false)
   const [newTextItalic, setNewTextItalic] = useState(false)
   const [newTextUnderline, setNewTextUnderline] = useState(false)
-  const [activeTool, setActiveTool] = useState<"none" | "pen" | "eraser">("none")
-  const [drawingLines, setDrawingLines] = useState<Array<{ x: number; y: number }[]>>([])
-  const [eraserSize] = useState(20)
+
 
   // Drag state for notes
   const [draggedNoteId, setDraggedNoteId] = useState<string | null>(null)
@@ -225,10 +215,7 @@ const DNRScoresheet: React.FC<DNRScoresheetProps> = ({
   const [resizeStartY, setResizeStartY] = useState(0)
   const [resizeStartHeight, setResizeStartHeight] = useState(0)
   
-  // Bar line and stem direction state
-  const [showBarLines, setShowBarLines] = useState(true)
-  const [barLineSpacing, setBarLineSpacing] = useState(BAR_LINE_SPACING)
-  const [selectedStemDirection, setSelectedStemDirection] = useState<'up' | 'down' | null>(null)
+
 
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const isInteracting = useRef(false)
@@ -244,16 +231,7 @@ const DNRScoresheet: React.FC<DNRScoresheetProps> = ({
   // Calculate current keyboard line Y position
   const currentKeyboardLineY = KEYBOARD_LINE_Y_POSITIONS[currentKeyboardLineIndex]
 
-  // Keep ScoreSheet in sync with RightSidebar eraser (and future tools) via custom event
-  useEffect(() => {
-    const handler = (e: Event) => {
-      const detail = (e as CustomEvent<{ tool: "none" | "pen" | "eraser" }>).detail
-      if (!detail) return
-      setActiveTool(detail.tool)
-    }
-    window.addEventListener("dng:tool", handler as EventListener)
-    return () => window.removeEventListener("dng:tool", handler as EventListener)
-  }, [])
+
 
   // Add drag handlers for text elements
   const handleTextMouseDown = useCallback(
@@ -476,17 +454,13 @@ const DNRScoresheet: React.FC<DNRScoresheetProps> = ({
       finalX = Math.round(finalX / 10) * 10
       finalY = Math.round(finalY / 10) * 10
 
-      // Auto-assign stem direction based on position
-      const stemProps = autoAssignStemDirection({ x: finalX, y: finalY })
-      
       const newNote: PlacedNotation = {
         id: Date.now().toString(),
         notation: mappedNotation,
         x: finalX,
         y: finalY,
         staveIndex: 0,
-        octave: 4,
-        ...stemProps
+        octave: 4
       }
       onAddNote(newNote)
 
@@ -502,54 +476,9 @@ const DNRScoresheet: React.FC<DNRScoresheetProps> = ({
     ],
   )
 
-  // Generate bar lines based on time signature and note positions
-  const generateBarLines = useCallback(() => {
-    if (!showBarLines) return []
-    
-    const barLines: Array<{ x: number; y: number; width: number; height: number }> = []
-    const { numerator } = currentPage.timeSignature
-    
-    // Calculate bar line positions based on time signature
-    let currentX = NOTE_BOUNDARY_LEFT
-    const maxX = NOTE_BOUNDARY_RIGHT
-    
-    while (currentX <= maxX) {
-      // Add bar line for each measure
-      barLines.push({
-        x: currentX,
-        y: KEYBOARD_LINE_Y_POSITIONS[0] - 20, // Start above first line
-        width: BAR_LINE_WIDTH,
-        height: KEYBOARD_LINE_Y_POSITIONS[KEYBOARD_LINE_Y_POSITIONS.length - 1] - KEYBOARD_LINE_Y_POSITIONS[0] + 40
-      })
-      
-      // Move to next measure position
-      currentX += barLineSpacing
-    }
-    
-    return barLines
-  }, [showBarLines, currentPage.timeSignature, barLineSpacing])
 
-  // Toggle stem direction for selected note
-  const toggleStemDirection = useCallback((noteId: string) => {
-    const note = currentPage.notes.find(n => n.id === noteId)
-    if (!note) return
-    
-    const newDirection = note.stemDirection === 'up' ? 'down' : 'up'
-    onUpdateNote(noteId, { 
-      stemDirection: newDirection,
-      stemLength: newDirection === 'up' ? 60 : 60 // Same length for both directions
-    })
-  }, [currentPage.notes, onUpdateNote])
 
-  // Auto-assign stem direction based on note position
-  const autoAssignStemDirection = useCallback((note: { x: number; y: number }) => {
-    const middleLine = KEYBOARD_LINE_Y_POSITIONS[Math.floor(KEYBOARD_LINE_Y_POSITIONS.length / 2)]
-    const direction: 'up' | 'down' = note.y < middleLine ? 'down' : 'up'
-    return {
-      stemDirection: direction,
-      stemLength: 60
-    }
-  }, [])
+
 
   const handleKeyPress = useCallback(
     (event: KeyboardEvent) => {
@@ -558,7 +487,6 @@ const DNRScoresheet: React.FC<DNRScoresheetProps> = ({
         showSettingsDropdown ||
         showKeyboardHelp ||
         showToolsDropdown ||
-        activeTool !== "none" ||
         showTextDialog
       )
         return
@@ -570,34 +498,9 @@ const DNRScoresheet: React.FC<DNRScoresheetProps> = ({
       const key = event.key
       const mappedNotation = getNotationByKey(key)
 
-      // Stem direction shortcuts
-      if (key === 'ArrowUp' && selectedNoteId) {
-        event.preventDefault()
-        event.stopPropagation()
-        const note = currentPage.notes.find(n => n.id === selectedNoteId)
-        if (note) {
-          onUpdateNote(selectedNoteId, { stemDirection: 'up', stemLength: 60 })
-        }
-        return
-      }
 
-      if (key === 'ArrowDown' && selectedNoteId) {
-        event.preventDefault()
-        event.stopPropagation()
-        const note = currentPage.notes.find(n => n.id === selectedNoteId)
-        if (note) {
-          onUpdateNote(selectedNoteId, { stemDirection: 'down', stemLength: 60 })
-        }
-        return
-      }
 
-      // Bar line toggle shortcut (B key)
-      if (key === 'b' || key === 'B') {
-        event.preventDefault()
-        event.stopPropagation()
-        setShowBarLines(!showBarLines)
-        return
-      }
+
 
       if (key === "Backspace" || key === "Delete") {
         event.preventDefault()
@@ -635,7 +538,6 @@ const DNRScoresheet: React.FC<DNRScoresheetProps> = ({
       showSettingsDropdown,
       showKeyboardHelp,
       showToolsDropdown,
-      activeTool,
       showTextDialog,
       deleteLastNote,
       placeNotation,
@@ -646,7 +548,7 @@ const DNRScoresheet: React.FC<DNRScoresheetProps> = ({
 
   const handleMidiMessage = useCallback(
     (event: MIDIMessageEvent) => {
-      if (!midiEnabled || showSettingsDropdown || showKeyboardHelp || showToolsDropdown || activeTool !== "none") return
+      if (!midiEnabled || showSettingsDropdown || showKeyboardHelp || showToolsDropdown) return
 
       if (!event.data || event.data.length < 3) {
         console.warn("Invalid MIDI message data.")
@@ -670,13 +572,10 @@ const DNRScoresheet: React.FC<DNRScoresheetProps> = ({
         }
       }
     },
-    [midiEnabled, showSettingsDropdown, showKeyboardHelp, showToolsDropdown, activeTool, placeNotation],
+    [midiEnabled, showSettingsDropdown, showKeyboardHelp, showToolsDropdown, placeNotation],
   )
 
   const handleImageClick = (event: React.MouseEvent<HTMLDivElement>) => {
-    if (activeTool !== "none") {
-      return
-    }
 
     const rect = event.currentTarget.getBoundingClientRect()
     const x = event.clientX - rect.left
@@ -766,126 +665,19 @@ const DNRScoresheet: React.FC<DNRScoresheetProps> = ({
     }
   }
 
-  const drawLine = useCallback((ctx: CanvasRenderingContext2D, line: { x: number; y: number }[]) => {
-    if (line.length < 2) return
-    ctx.beginPath()
-    ctx.moveTo(line[0].x, line[0].y)
-    for (let i = 1; i < line.length; i++) {
-      ctx.lineTo(line[i].x, line[i].y)
-    }
-    ctx.stroke()
-  }, [])
 
-  useEffect(() => {
-    const canvas = canvasRef.current
-    if (!canvas) return
-    const ctx = canvas.getContext("2d")
-    if (!ctx) return
 
-    ctx.clearRect(0, 0, canvas.width, canvas.height)
-    ctx.lineWidth = 2
-    ctx.lineCap = "round"
-    ctx.strokeStyle = "black"
-    ctx.globalCompositeOperation = "source-over"
 
-    drawingLines.forEach((line) => drawLine(ctx, line))
-  }, [drawingLines, drawLine])
 
-  const eraseArticulationsAt = useCallback(
-    (x: number, y: number) => {
-      const threshold = eraserSize
-      const toRemove: string[] = []
-      for (const art of articulationElements) {
-        const dx = x - art.x
-        const dy = y - art.y
-        if (Math.hypot(dx, dy) <= threshold) {
-          toRemove.push(art.id)
-        }
-      }
-      Array.from(new Set(toRemove)).forEach((id) => onRemoveArticulation(id))
-    },
-    [articulationElements, eraserSize, onRemoveArticulation],
-  )
 
-  const handleMouseDown = useCallback(
-    (event: React.MouseEvent<HTMLDivElement>) => {
-      if (activeTool === "none" || !canvasRef.current) return
-      isInteracting.current = true
-      const rect = canvasRef.current.getBoundingClientRect()
-      const x = event.clientX - rect.left
-      const y = event.clientY - rect.top
-      const ctx = canvasRef.current.getContext("2d")
-      if (!ctx) return
 
-      if (activeTool === "pen") {
-        currentLine.current = [{ x, y }]
-        ctx.beginPath()
-        ctx.moveTo(x, y)
-        ctx.lineWidth = 2
-        ctx.lineCap = "round"
-        ctx.strokeStyle = "black"
-        ctx.globalCompositeOperation = "source-over"
-      } else if (activeTool === "eraser") {
-        ctx.globalCompositeOperation = "destination-out"
-        ctx.beginPath()
-        ctx.arc(x, y, eraserSize / 2, 0, Math.PI * 2)
-        ctx.fill()
-        eraseArticulationsAt(x, y)
-      }
-    },
-    [activeTool, eraserSize, eraseArticulationsAt],
-  )
 
-  const handleDrawingMouseMove = useCallback(
-    (event: React.MouseEvent<HTMLDivElement>) => {
-      if (!isInteracting.current || !canvasRef.current) return
-      const rect = canvasRef.current.getBoundingClientRect()
-      const x = event.clientX - rect.left
-      const y = event.clientY - rect.top
-      const ctx = canvasRef.current.getContext("2d")
-      if (!ctx) return
 
-      if (activeTool === "pen") {
-        ctx.lineTo(x, y)
-        ctx.stroke()
-        currentLine.current.push({ x, y })
-      } else if (activeTool === "eraser") {
-        ctx.beginPath()
-        ctx.arc(x, y, eraserSize / 2, 0, Math.PI * 2)
-        ctx.fill()
-        eraseArticulationsAt(x, y)
-      }
-    },
-    [activeTool, eraserSize, eraseArticulationsAt],
-  )
 
-  const handleMouseUp = useCallback(() => {
-    if (!isInteracting.current) return
-    isInteracting.current = false
-    const ctx = canvasRef.current?.getContext("2d")
-    if (ctx) {
-      ctx.globalCompositeOperation = "source-over"
-    }
-
-    if (activeTool === "pen") {
-      if (currentLine.current.length > 1) {
-        setDrawingLines((prev) => [...prev, currentLine.current])
-      }
-      currentLine.current = []
-    }
-  }, [activeTool])
 
   const handleClearAll = () => {
     // Clear all notes
     currentPage.notes.forEach(note => onRemoveNote(note.id))
-    setDrawingLines([])
-    const canvas = canvasRef.current
-    if (canvas) {
-      const ctx = canvas.getContext("2d")
-      if (ctx) {
-        ctx.clearRect(0, 0, canvas.width, canvas.height)
-      }
-    }
   }
 
   const exportToPDF = async () => {
@@ -920,22 +712,17 @@ const DNRScoresheet: React.FC<DNRScoresheetProps> = ({
     }
   }
 
-  const handleToolToggle = (tool: "pen" | "eraser") => {
-    setActiveTool((prev) => (prev === tool ? "none" : tool))
-    setShowToolsDropdown(false)
-  }
+
 
   const getCursorStyle = useCallback(() => {
     if (isDraggingNote) return "grabbing"
     if (draggedTextId) return "grabbing"
     if (draggedArticulationId) return "grabbing"
-    if (activeTool === "pen") return "crosshair"
-    if (activeTool === "eraser") return 'url("/placeholder.svg?width=24&height=24"), auto'
     if (isTextMode) return "text"
     if (selectedArticulation) return "crosshair"
-    if (selectedNotation && activeTool === "none" && !keyboardEnabled && !midiEnabled) return "crosshair"
+    if (selectedNotation && !keyboardEnabled && !midiEnabled) return "crosshair"
     return "default"
-  }, [activeTool, selectedNotation, keyboardEnabled, midiEnabled, isTextMode, selectedArticulation, isDraggingNote, draggedTextId, draggedArticulationId])
+  }, [selectedNotation, keyboardEnabled, midiEnabled, isTextMode, selectedArticulation, isDraggingNote, draggedTextId, draggedArticulationId])
 
   useEffect(() => {
     if (midiEnabled) {
@@ -1268,24 +1055,7 @@ const DNRScoresheet: React.FC<DNRScoresheetProps> = ({
                     <div className="my-2 h-px bg-gray-200" />
                     <div className="px-2 py-1 text-sm font-semibold text-gray-700">Drawing Tools</div>
                     <div className="my-1 h-px bg-gray-200" />
-                    <button
-                      onClick={() => handleToolToggle("pen")}
-                      className={`flex items-center gap-2 w-full text-left px-2 py-1.5 text-sm rounded-sm ${
-                        activeTool === "pen" ? "bg-blue-100 text-blue-700" : "text-gray-700 hover:bg-gray-100"
-                      }`}
-                    >
-                      <Pen className="w-3 h-3" />
-                      Pen {activeTool === "pen" && "(Active)"}
-                    </button>
-                    <button
-                      onClick={() => handleToolToggle("eraser")}
-                      className={`flex items-center gap-2 w-full text-left px-2 py-1.5 text-sm rounded-sm ${
-                        activeTool === "eraser" ? "bg-red-100 text-red-700" : "text-gray-700 hover:bg-gray-100"
-                      }`}
-                    >
-                      <Eraser className="w-3 h-3" />
-                      Eraser {activeTool === "eraser" && "(Active)"}
-                    </button>
+
                   </div>
                 )}
               </div>
@@ -1338,7 +1108,7 @@ const DNRScoresheet: React.FC<DNRScoresheetProps> = ({
         </div>
 
         {/* Status Banner */}
-        {((keyboardEnabled || midiEnabled) && activeTool === "none") ||
+        {(keyboardEnabled || midiEnabled) ||
           isTextMode ||
           selectedArticulation ||
           (selectedNotation && !keyboardEnabled && !midiEnabled) ? (
@@ -1350,8 +1120,7 @@ const DNRScoresheet: React.FC<DNRScoresheetProps> = ({
                   {isTextMode && <Type className="w-4 h-4" />}
                   {selectedArticulation && <span className="text-lg">♪</span>}
                   {selectedNotation && !keyboardEnabled && !midiEnabled && <Music className="w-4 h-4" />}
-                  {showBarLines && <span className="text-lg">|</span>}
-                  {selectedStemDirection && <span className="text-lg">{selectedStemDirection === 'up' ? '↑' : '↓'}</span>}
+
                   <span className="font-medium">
                     [DNR Mode]{" "}
                     {isTextMode
@@ -1384,11 +1153,11 @@ const DNRScoresheet: React.FC<DNRScoresheetProps> = ({
             if (e.target === e.currentTarget) {
               setSelectedNoteId(null)
             }
-            if (keyboardEnabled && activeTool === "none") {
+            if (keyboardEnabled) {
               document.body.focus()
             }
           }}
-          tabIndex={keyboardEnabled && activeTool === "none" ? 0 : -1}
+          tabIndex={keyboardEnabled ? 0 : -1}
         >
           {/* DNR Background Image */}
           <img
@@ -1442,22 +1211,19 @@ const DNRScoresheet: React.FC<DNRScoresheetProps> = ({
           {/* Overlay for interactions */}
           <div
             className="absolute inset-0 z-10"
-            onClick={activeTool === "none" ? handleImageClick : undefined}
-            onMouseDown={handleMouseDown}
+            onClick={handleImageClick}
+            
             onMouseMove={(e) => {
-              handleDrawingMouseMove(e)
               handleNoteMouseMove(e)
               if (onUpdateTextElement) handleTextMouseMove(e)
               if (onUpdateArticulation) handleArticulationMouseMove(e)
             }}
             onMouseUp={() => {
-              handleMouseUp()
               handleNoteMouseUp()
               handleTextMouseUp()
               handleArticulationMouseUp()
             }}
             onMouseLeave={() => {
-              handleMouseUp()
               handleNoteMouseUp()
               handleTextMouseUp()
               handleArticulationMouseUp()
@@ -1466,14 +1232,7 @@ const DNRScoresheet: React.FC<DNRScoresheetProps> = ({
               cursor: getCursorStyle(),
             }}
           >
-            {/* Canvas for drawing */}
-            <canvas
-              ref={canvasRef}
-              className="absolute inset-0 z-30"
-              width={RENDERED_SCORESHEET_WIDTH}
-              height={RENDERED_SCORESHEET_HEIGHT}
-              style={{ pointerEvents: "none" }}
-            />
+
 
             {/* Bar Lines */}
             {showBarLines && generateBarLines().map((barLine, index) => (
@@ -1507,14 +1266,14 @@ const DNRScoresheet: React.FC<DNRScoresheetProps> = ({
                 onMouseDown={(e) => {
                   e.stopPropagation()
                   // Only start drag if not in note placement mode
-                  if (!selectedNotation || activeTool !== "none" || isTextMode || selectedArticulation || keyboardEnabled || midiEnabled) {
+                  if (!selectedNotation || isTextMode || selectedArticulation || keyboardEnabled || midiEnabled) {
                     handleNoteMouseDown(e, placedNote.id)
                   }
                 }}
                 onClick={(e) => {
                   e.stopPropagation()
                   // Delete note on click if in note placement mode
-                  if (selectedNotation && activeTool === "none" && !isTextMode && !selectedArticulation && !keyboardEnabled && !midiEnabled) {
+                  if (selectedNotation && !isTextMode && !selectedArticulation && !keyboardEnabled && !midiEnabled) {
                     onRemoveNote(placedNote.id)
                   }
                 }}
@@ -1534,40 +1293,14 @@ const DNRScoresheet: React.FC<DNRScoresheetProps> = ({
                       imageRendering: '-webkit-optimize-contrast'
                     }}
                   />
-                  {/* Stem rendering */}
-                  {placedNote.stemDirection && (
-                    <div
-                      className="absolute pointer-events-none"
-                      style={{
-                        left: '50%',
-                        top: placedNote.stemDirection === 'up' ? '0%' : '100%',
-                        width: '2px',
-                        height: `${placedNote.stemLength || 60}px`,
-                        backgroundColor: '#000000',
-                        transform: 'translateX(-50%)',
-                        transformOrigin: placedNote.stemDirection === 'up' ? 'bottom' : 'top',
-                      }}
-                    />
-                  )}
+
                   {/* Drag indicator - only show when selected */}
                   {selectedNoteId === placedNote.id && (
                     <div className="absolute -top-2 -left-2 w-4 h-4 bg-purple-500 text-white rounded-full opacity-100 transition-all duration-300 flex items-center justify-center text-xs font-bold shadow-lg">
                       ⋮⋮
                     </div>
                   )}
-                  {/* Stem direction toggle button - only show when selected */}
-                  {selectedNoteId === placedNote.id && (
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        toggleStemDirection(placedNote.id)
-                      }}
-                      className="absolute -top-3 -left-3 w-6 h-6 bg-blue-500 text-white rounded-full opacity-100 transition-all duration-300 flex items-center justify-center text-xs font-bold shadow-lg hover:bg-blue-600"
-                      title={`Toggle stem direction (currently ${placedNote.stemDirection || 'auto'})`}
-                    >
-                      {placedNote.stemDirection === 'up' ? '↑' : placedNote.stemDirection === 'down' ? '↓' : '↕'}
-                    </button>
-                  )}
+
                   {/* Delete button - only show when selected */}
                   {selectedNoteId === placedNote.id && (
                     <button
@@ -1702,7 +1435,7 @@ const DNRScoresheet: React.FC<DNRScoresheetProps> = ({
             ))}
 
             {/* Next note position indicator */}
-            {(keyboardEnabled || midiEnabled) && activeTool === "none" && !isTextMode && !selectedArticulation && (
+            {(keyboardEnabled || midiEnabled) && !isTextMode && !selectedArticulation && (
               <div
                 className="absolute w-px h-6 bg-purple-400 opacity-100 animate-pulse z-20 translate-y-1/2"
                 style={{
@@ -1713,7 +1446,7 @@ const DNRScoresheet: React.FC<DNRScoresheetProps> = ({
             )}
 
             {/* Mouse cursor indicator for note placement */}
-            {selectedNotation && activeTool === "none" && !isTextMode && !selectedArticulation && !keyboardEnabled && !midiEnabled && (
+            {selectedNotation && !isTextMode && !selectedArticulation && !keyboardEnabled && !midiEnabled && (
               <div
                 className="absolute w-8 h-8 bg-purple-500 bg-opacity-30 border-2 border-purple-500 rounded-full z-20 pointer-events-none"
                 style={{
@@ -1724,7 +1457,7 @@ const DNRScoresheet: React.FC<DNRScoresheetProps> = ({
             )}
 
             {/* Note preview at cursor position */}
-            {selectedNotation && activeTool === "none" && !isTextMode && !selectedArticulation && !keyboardEnabled && !midiEnabled && (
+            {selectedNotation && !isTextMode && !selectedArticulation && !keyboardEnabled && !midiEnabled && (
               <div
                 className="absolute z-20 pointer-events-none opacity-50"
                 style={{

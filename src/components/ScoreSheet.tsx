@@ -7,8 +7,6 @@ import {
   Keyboard,
   RotateCcw,
   Download,
-  Pen,
-  Eraser,
   Settings,
   Type,
   Bold,
@@ -19,7 +17,7 @@ import {
 import { notations, getNotationByKey, type Notation } from "../data/notations"
 import html2canvas from "html2canvas"
 import jsPDF from "jspdf"
-import type { TextElement, ArticulationElement, LyricElement, HighlighterElement, DefaultBarLine } from "../App"
+import type { TextElement, ArticulationElement, LyricElement, HighlighterElement } from "../App"
 
 import PianoComponent from "./Piano"
 import type { ScoreMode } from "./ModeSelector"
@@ -32,8 +30,6 @@ interface PlacedNotation {
   y: number
   staveIndex: number
   octave: number
-  stemDirection?: 'up' | 'down' // Stem direction for music notation
-  stemLength?: number // Length of the stem in pixels
 }
 
 interface ScorePage {
@@ -76,10 +72,7 @@ interface ScoreSheetProps {
   onUpdateLyric?: (id: string, updates: Partial<LyricElement>) => void
   highlighterElements?: HighlighterElement[]
   onAddHighlighter?: (highlighter: HighlighterElement) => void
-  defaultBarLines?: DefaultBarLine[]
-  onAddDefaultBarLine?: (defaultBarLine: DefaultBarLine) => void
-  onRemoveDefaultBarLine?: (id: string) => void
-  onUpdateDefaultBarLine?: (id: string, updates: Partial<DefaultBarLine>) => void
+
 
   canUndo: boolean
   canRedo: boolean
@@ -103,11 +96,7 @@ const KEYBOARD_LINE_Y_POSITIONS = [250, 380, 510, 640, 770, 900, 1030, 1160, 129
 const NOTE_BOUNDARY_LEFT = INITIAL_KEYBOARD_NOTE_X_POSITION
 const NOTE_BOUNDARY_RIGHT = 1200
 
-// Bar line constants
-const BAR_LINE_WIDTH = 3
-const BAR_LINE_SPACING = 200 // Distance between bar lines
-const BAR_LINE_COLOR = '#000000'
-const BAR_LINE_OPACITY = 0.8
+
 
 
 
@@ -163,11 +152,11 @@ const midiNoteToNotationMap: { [key: number]: string } = {
 // const MAX_SIMULTANEOUS_NOTES = 10 // Limit for performance stability
 
 const KEY_SIGNATURE_OPTIONS = [
-  { label: "C Major / A Minor", value: "C" },
-  { label: "G Major / E Minor", value: "G" },
-  { label: "D Major / B Minor", value: "D" },
-  { label: "F Major / D Minor", value: "F" },
-  { label: "B Major / G Minor", value: "B" },
+  { label: "C Major", value: "C" },
+  { label: "G Major", value: "G" },
+  { label: "D Major", value: "D" },
+  { label: "F Major", value: "F" },
+  { label: "B Major", value: "B" },
 ]
 
 const TIME_SIGNATURE_OPTIONS = [
@@ -212,10 +201,7 @@ const ScoreSheet: React.FC<ScoreSheetProps> = ({
   onUpdateLyric,
   highlighterElements = [],
   onAddHighlighter,
-  defaultBarLines = [],
-  onAddDefaultBarLine,
-  onRemoveDefaultBarLine,
-  onUpdateDefaultBarLine,
+
 
 
 
@@ -248,13 +234,9 @@ const ScoreSheet: React.FC<ScoreSheetProps> = ({
   const [lyricsDialogPosition, setLyricsDialogPosition] = useState({ x: 0, y: 0 })
   const [newLyricsContent, setNewLyricsContent] = useState("")
   const [selectedNoteForLyrics, setSelectedNoteForLyrics] = useState<string | null>(null)
-  const [showDefaultBarLinesDialog, setShowDefaultBarLinesDialog] = useState(false)
-  const [selectedLineIndex, setSelectedLineIndex] = useState<number | null>(null)
+
   
-  // Bar line and stem direction state
-  const [showBarLines, setShowBarLines] = useState(true)
-  const [barLineSpacing, setBarLineSpacing] = useState(BAR_LINE_SPACING)
-  const [selectedStemDirection, setSelectedStemDirection] = useState<'up' | 'down' | null>(null)
+
 
   // Cursor navigation
   const {
@@ -315,12 +297,7 @@ const ScoreSheet: React.FC<ScoreSheetProps> = ({
 
 
 
-  const canvasRef = useRef<HTMLCanvasElement>(null)
-  const [activeTool, setActiveTool] = useState<"none" | "pen" | "eraser">("none")
-  const isInteracting = useRef(false)
-  const currentLine = useRef<Array<{ x: number; y: number }>>([])
-  const [drawingLines, setDrawingLines] = useState<Array<{ x: number; y: number }[]>>([])
-  const [eraserSize] = useState(20)
+
 
   // Add drag state for text elements
   const [draggedTextId, setDraggedTextId] = useState<string | null>(null)
@@ -343,9 +320,7 @@ const ScoreSheet: React.FC<ScoreSheetProps> = ({
   const [draggedLyricId, setDraggedLyricId] = useState<string | null>(null)
   const [lyricDragOffset, setLyricDragOffset] = useState({ x: 0, y: 0 })
 
-  // Drag state for default bar lines
-  const [draggedDefaultBarLineId, setDraggedDefaultBarLineId] = useState<string | null>(null)
-  const [defaultBarLineDragOffset, setDefaultBarLineDragOffset] = useState({ x: 0, y: 0 })
+
 
   // Highlighter state
   const [isDrawingHighlight, setIsDrawingHighlight] = useState(false)
@@ -354,16 +329,7 @@ const ScoreSheet: React.FC<ScoreSheetProps> = ({
 
 
 
-  // Keep ScoreSheet in sync with RightSidebar eraser (and future tools) via custom event
-  useEffect(() => {
-    const handler = (e: Event) => {
-      const detail = (e as CustomEvent<{ tool: "none" | "pen" | "eraser" }>).detail
-      if (!detail) return
-      setActiveTool(detail.tool)
-    }
-    window.addEventListener("dng:tool", handler as EventListener)
-    return () => window.removeEventListener("dng:tool", handler as EventListener)
-  }, [])
+
 
   // Add drag handlers for text elements
   const handleTextMouseDown = useCallback(
@@ -547,44 +513,7 @@ const ScoreSheet: React.FC<ScoreSheetProps> = ({
     setLyricDragOffset({ x: 0, y: 0 })
   }, [])
 
-  // Default bar line handlers
-  const handleDefaultBarLineMouseDown = useCallback(
-    (e: React.MouseEvent, defaultBarLineId: string) => {
-      e.preventDefault()
-      e.stopPropagation()
-      const defaultBarLine = defaultBarLines.find((dbl) => dbl.id === defaultBarLineId)
-      if (!defaultBarLine) return
 
-      setDraggedDefaultBarLineId(defaultBarLineId)
-      setDefaultBarLineDragOffset({
-        x: e.clientX - defaultBarLine.x,
-        y: e.clientY - 0, // Y position is fixed based on line index
-      })
-    },
-    [defaultBarLines],
-  )
-
-  const handleDefaultBarLineMouseMove = useCallback(
-    (e: React.MouseEvent) => {
-      if (!draggedDefaultBarLineId) return
-      e.preventDefault()
-
-      const newX = e.clientX - defaultBarLineDragOffset.x
-      
-      // Constrain to canvas boundaries
-      const canvasWidth = RENDERED_SCORESHEET_WIDTH
-      const padding = 50
-      const constrainedX = Math.max(padding, Math.min(newX, canvasWidth - padding))
-
-      onUpdateDefaultBarLine?.(draggedDefaultBarLineId, { x: constrainedX })
-    },
-    [draggedDefaultBarLineId, defaultBarLineDragOffset, onUpdateDefaultBarLine],
-  )
-
-  const handleDefaultBarLineMouseUp = useCallback(() => {
-    setDraggedDefaultBarLineId(null)
-    setDefaultBarLineDragOffset({ x: 0, y: 0 })
-  }, [])
 
   // Highlighter handlers
   const handleHighlighterMouseDown = useCallback((event: React.MouseEvent<HTMLDivElement>) => {
@@ -711,15 +640,6 @@ const ScoreSheet: React.FC<ScoreSheetProps> = ({
         console.log('Calling onAddNote with:', newNote)
         onAddNote(newNote)
         console.log('onAddNote called successfully')
-        
-        // Update cursor position to after the placed note
-        setNextNotePosition(finalX + NOTATION_KEYBOARD_X_INCREMENT)
-        
-        // Update keyboard line position based on the placed note
-        const lineIndex = KEYBOARD_LINE_Y_POSITIONS.findIndex(y => Math.abs(y - finalY) < 10)
-        if (lineIndex !== -1) {
-          setCurrentKeyboardLineIndex(lineIndex)
-        }
         return
       }
 
@@ -742,81 +662,29 @@ const ScoreSheet: React.FC<ScoreSheetProps> = ({
       finalX = Math.round(finalX / 10) * 10
       finalY = Math.round(finalY / 10) * 10
 
-      // Auto-assign stem direction based on position
-      const stemProps = autoAssignStemDirection({ x: finalX, y: finalY } as PlacedNotation)
-      
       const newNote: PlacedNotation = {
         id: Date.now().toString(),
         notation: mappedNotation,
         x: finalX,
         y: finalY,
         staveIndex: 0,
-        octave: 4,
-        ...stemProps
+        octave: 4
       }
       console.log('Calling onAddNote with (keyboard):', newNote)
       onAddNote(newNote)
-
-      setNextNotePosition(finalX + NOTATION_KEYBOARD_X_INCREMENT)
     },
     [
       nextNotePosition,
       currentKeyboardLineIndex,
       currentKeyboardLineY,
       onAddNote,
-      setNextNotePosition,
       setCurrentKeyboardLineIndex,
     ],
   )
 
-  // Generate bar lines based on time signature and note positions
-  const generateBarLines = useCallback(() => {
-    if (!showBarLines) return []
-    
-    const barLines: Array<{ x: number; y: number; width: number; height: number }> = []
-    const { numerator } = currentPage.timeSignature
-    
-    // Calculate bar line positions based on time signature
-    let currentX = NOTE_BOUNDARY_LEFT
-    const maxX = NOTE_BOUNDARY_RIGHT
-    
-    while (currentX <= maxX) {
-      // Add bar line for each measure
-      barLines.push({
-        x: currentX,
-        y: KEYBOARD_LINE_Y_POSITIONS[0] - 20, // Start above first line
-        width: BAR_LINE_WIDTH,
-        height: KEYBOARD_LINE_Y_POSITIONS[KEYBOARD_LINE_Y_POSITIONS.length - 1] - KEYBOARD_LINE_Y_POSITIONS[0] + 40
-      })
-      
-      // Move to next measure position
-      currentX += barLineSpacing
-    }
-    
-    return barLines
-  }, [showBarLines, currentPage.timeSignature, barLineSpacing])
 
-  // Toggle stem direction for selected note
-  const toggleStemDirection = useCallback((noteId: string) => {
-    const note = currentPage.notes.find(n => n.id === noteId)
-    if (!note) return
-    
-    const newDirection = note.stemDirection === 'up' ? 'down' : 'up'
-    onUpdateNote(noteId, { 
-      stemDirection: newDirection,
-      stemLength: newDirection === 'up' ? 60 : 60 // Same length for both directions
-    })
-  }, [currentPage.notes, onUpdateNote])
 
-  // Auto-assign stem direction based on note position
-  const autoAssignStemDirection = useCallback((note: { x: number; y: number }) => {
-    const middleLine = KEYBOARD_LINE_Y_POSITIONS[Math.floor(KEYBOARD_LINE_Y_POSITIONS.length / 2)]
-    const direction: 'up' | 'down' = note.y < middleLine ? 'down' : 'up'
-    return {
-      stemDirection: direction,
-      stemLength: 60
-    }
-  }, [])
+
 
   const handleKeyPress = useCallback(
     (event: KeyboardEvent) => {
@@ -826,7 +694,7 @@ const ScoreSheet: React.FC<ScoreSheetProps> = ({
         showSettingsDropdown,
         showKeyboardHelp,
         showToolsDropdown,
-        activeTool,
+
         showTextDialog,
         showLyricsDialog,
         isLyricsMode
@@ -837,7 +705,6 @@ const ScoreSheet: React.FC<ScoreSheetProps> = ({
         showSettingsDropdown ||
         showKeyboardHelp ||
         showToolsDropdown ||
-        activeTool !== "none" ||
         showTextDialog ||
         showLyricsDialog ||
         isLyricsMode
@@ -847,7 +714,6 @@ const ScoreSheet: React.FC<ScoreSheetProps> = ({
           showSettingsDropdown,
           showKeyboardHelp,
           showToolsDropdown,
-          activeTool,
           showTextDialog,
           showLyricsDialog,
           isLyricsMode
@@ -879,34 +745,9 @@ const ScoreSheet: React.FC<ScoreSheetProps> = ({
         return
       }
 
-      // Stem direction shortcuts
-      if (key === 'ArrowUp' && selectedNoteId) {
-        event.preventDefault()
-        event.stopPropagation()
-        const note = currentPage.notes.find(n => n.id === selectedNoteId)
-        if (note) {
-          onUpdateNote(selectedNoteId, { stemDirection: 'up', stemLength: 60 })
-        }
-        return
-      }
 
-      if (key === 'ArrowDown' && selectedNoteId) {
-        event.preventDefault()
-        event.stopPropagation()
-        const note = currentPage.notes.find(n => n.id === selectedNoteId)
-        if (note) {
-          onUpdateNote(selectedNoteId, { stemDirection: 'down', stemLength: 60 })
-        }
-        return
-      }
 
-      // Bar line toggle shortcut (B key)
-      if (key === 'b' || key === 'B') {
-        event.preventDefault()
-        event.stopPropagation()
-        setShowBarLines(!showBarLines)
-        return
-      }
+
 
       if (key === "Backspace" || key === "Delete") {
         event.preventDefault()
@@ -947,7 +788,7 @@ const ScoreSheet: React.FC<ScoreSheetProps> = ({
       showSettingsDropdown,
       showKeyboardHelp,
       showToolsDropdown,
-      activeTool,
+
       showTextDialog,
       showLyricsDialog,
       isLyricsMode,
@@ -962,7 +803,7 @@ const ScoreSheet: React.FC<ScoreSheetProps> = ({
 
   const handleMidiMessage = useCallback(
     (event: MIDIMessageEvent) => {
-      if (!midiEnabled || showSettingsDropdown || showKeyboardHelp || showToolsDropdown || activeTool !== "none") return
+      if (!midiEnabled || showSettingsDropdown || showKeyboardHelp || showToolsDropdown) return
 
       if (!event.data || event.data.length < 3) {
         console.warn("Invalid MIDI message data.")
@@ -986,13 +827,10 @@ const ScoreSheet: React.FC<ScoreSheetProps> = ({
         }
       }
     },
-    [midiEnabled, showSettingsDropdown, showKeyboardHelp, showToolsDropdown, activeTool, placeNotation],
+    [midiEnabled, showSettingsDropdown, showKeyboardHelp, showToolsDropdown, placeNotation],
   )
 
   const handleImageClick = (event: React.MouseEvent<HTMLDivElement>) => {
-    if (activeTool !== "none") {
-      return
-    }
 
     const rect = event.currentTarget.getBoundingClientRect()
     const x = event.clientX - rect.left
@@ -1065,7 +903,7 @@ const ScoreSheet: React.FC<ScoreSheetProps> = ({
 
   // Handle mouse move to update cursor position for note placement
   const handleNotePlacementMouseMove = useCallback((event: React.MouseEvent<HTMLDivElement>) => {
-    if (activeTool !== "none" || !selectedNotation || isTextMode || isLyricsMode || selectedArticulation || keyboardEnabled || midiEnabled) {
+    if (!selectedNotation || isTextMode || isLyricsMode || selectedArticulation || keyboardEnabled || midiEnabled) {
       return
     }
 
@@ -1085,7 +923,7 @@ const ScoreSheet: React.FC<ScoreSheetProps> = ({
     }, 0)
     
     setCurrentKeyboardLineIndex(closestLineIndex)
-  }, [activeTool, selectedNotation, isTextMode, isLyricsMode, selectedArticulation, keyboardEnabled, midiEnabled])
+  }, [selectedNotation, isTextMode, isLyricsMode, selectedArticulation, keyboardEnabled, midiEnabled])
 
   const handleAddText = () => {
     if (!newTextContent.trim()) return
@@ -1128,125 +966,14 @@ const ScoreSheet: React.FC<ScoreSheetProps> = ({
     setSelectedNoteForLyrics(null)
   }
 
-  const drawLine = useCallback((ctx: CanvasRenderingContext2D, line: { x: number; y: number }[]) => {
-    if (line.length < 2) return
-    ctx.beginPath()
-    ctx.moveTo(line[0].x, line[0].y)
-    for (let i = 1; i < line.length; i++) {
-      ctx.lineTo(line[i].x, line[i].y)
-    }
-    ctx.stroke()
-  }, [])
 
-  useEffect(() => {
-    const canvas = canvasRef.current
-    if (!canvas) return
-    const ctx = canvas.getContext("2d")
-    if (!ctx) return
 
-    ctx.clearRect(0, 0, canvas.width, canvas.height)
-    ctx.lineWidth = 2
-    ctx.lineCap = "round"
-    ctx.strokeStyle = "black"
-    ctx.globalCompositeOperation = "source-over"
 
-    drawingLines.forEach((line) => drawLine(ctx, line))
-  }, [drawingLines, drawLine])
 
-  const eraseArticulationsAt = useCallback(
-    (x: number, y: number) => {
-      const threshold = eraserSize
-      const toRemove: string[] = []
-      for (const art of articulationElements) {
-        const dx = x - art.x
-        const dy = y - art.y
-        if (Math.hypot(dx, dy) <= threshold) {
-          toRemove.push(art.id)
-        }
-      }
-      Array.from(new Set(toRemove)).forEach((id) => onRemoveArticulation(id))
-    },
-    [articulationElements, eraserSize, onRemoveArticulation],
-  )
 
-  const handleMouseDown = useCallback(
-    (event: React.MouseEvent<HTMLDivElement>) => {
-      if (activeTool === "none" || !canvasRef.current) return
-      isInteracting.current = true
-      const rect = canvasRef.current.getBoundingClientRect()
-      const x = event.clientX - rect.left
-      const y = event.clientY - rect.top
-      const ctx = canvasRef.current.getContext("2d")
-      if (!ctx) return
-
-      if (activeTool === "pen") {
-        currentLine.current = [{ x, y }]
-        ctx.beginPath()
-        ctx.moveTo(x, y)
-        ctx.lineWidth = 2
-        ctx.lineCap = "round"
-        ctx.strokeStyle = "black"
-        ctx.globalCompositeOperation = "source-over"
-      } else if (activeTool === "eraser") {
-        ctx.globalCompositeOperation = "destination-out"
-        ctx.beginPath()
-        ctx.arc(x, y, eraserSize / 2, 0, Math.PI * 2)
-        ctx.fill()
-        eraseArticulationsAt(x, y)
-      }
-    },
-    [activeTool, eraserSize, eraseArticulationsAt],
-  )
-
-  const handleDrawingMouseMove = useCallback(
-    (event: React.MouseEvent<HTMLDivElement>) => {
-      if (!isInteracting.current || !canvasRef.current) return
-      const rect = canvasRef.current.getBoundingClientRect()
-      const x = event.clientX - rect.left
-      const y = event.clientY - rect.top
-      const ctx = canvasRef.current.getContext("2d")
-      if (!ctx) return
-
-      if (activeTool === "pen") {
-        ctx.lineTo(x, y)
-        ctx.stroke()
-        currentLine.current.push({ x, y })
-      } else if (activeTool === "eraser") {
-        ctx.beginPath()
-        ctx.arc(x, y, eraserSize / 2, 0, Math.PI * 2)
-        ctx.fill()
-        eraseArticulationsAt(x, y)
-      }
-    },
-    [activeTool, eraserSize, eraseArticulationsAt],
-  )
-
-  const handleMouseUp = useCallback(() => {
-    if (!isInteracting.current) return
-    isInteracting.current = false
-    const ctx = canvasRef.current?.getContext("2d")
-    if (ctx) {
-      ctx.globalCompositeOperation = "source-over"
-    }
-
-    if (activeTool === "pen") {
-      if (currentLine.current.length > 1) {
-        setDrawingLines((prev) => [...prev, currentLine.current])
-      }
-      currentLine.current = []
-    }
-  }, [activeTool])
 
   const handleClearAll = () => {
     onClearPage()
-    setDrawingLines([])
-    const canvas = canvasRef.current
-    if (canvas) {
-      const ctx = canvas.getContext("2d")
-      if (ctx) {
-        ctx.clearRect(0, 0, canvas.width, canvas.height)
-      }
-    }
   }
 
   const exportToPDF = async () => {
@@ -1281,26 +1008,21 @@ const ScoreSheet: React.FC<ScoreSheetProps> = ({
     }
   }
 
-  const handleToolToggle = (tool: "pen" | "eraser") => {
-    setActiveTool((prev) => (prev === tool ? "none" : tool))
-    setShowToolsDropdown(false)
-  }
+
 
   const getCursorStyle = useCallback(() => {
     if (isDraggingNote) return "grabbing"
     if (draggedTextId) return "grabbing"
     if (draggedArticulationId) return "grabbing"
     if (draggedLyricId) return "grabbing"
-    if (draggedDefaultBarLineId) return "grabbing"
-    if (activeTool === "pen") return "crosshair"
-    if (activeTool === "eraser") return 'url("/placeholder.svg?width=24&height=24"), auto'
+
     if (isTextMode) return "text"
     if (isLyricsMode) return "text"
     if (isHighlighterMode) return "crosshair"
     if (selectedArticulation) return "crosshair"
-    if (selectedNotation && activeTool === "none" && !keyboardEnabled && !midiEnabled) return "crosshair"
+    if (selectedNotation && !keyboardEnabled && !midiEnabled) return "crosshair"
     return "default"
-  }, [activeTool, selectedNotation, keyboardEnabled, midiEnabled, isTextMode, isLyricsMode, isHighlighterMode, selectedArticulation, isDraggingNote, draggedTextId, draggedArticulationId, draggedLyricId, draggedDefaultBarLineId])
+  }, [selectedNotation, keyboardEnabled, midiEnabled, isTextMode, isLyricsMode, isHighlighterMode, selectedArticulation, isDraggingNote, draggedTextId, draggedArticulationId, draggedLyricId])
 
   useEffect(() => {
     if (midiEnabled) {
@@ -1403,6 +1125,9 @@ const ScoreSheet: React.FC<ScoreSheetProps> = ({
     }
   }, [handleKeyPress, keyboardEnabled])
 
+  // Use a ref to track the last note position to prevent unnecessary re-renders
+  const lastNotePositionRef = useRef({ x: INITIAL_KEYBOARD_NOTE_X_POSITION, y: KEYBOARD_LINE_Y_POSITIONS[0] })
+  
   useEffect(() => {
     if (currentPage.notes.length > 0) {
       const lastNote = currentPage.notes[currentPage.notes.length - 1]
@@ -1410,15 +1135,19 @@ const ScoreSheet: React.FC<ScoreSheetProps> = ({
       const lastNoteLineIndex = KEYBOARD_LINE_Y_POSITIONS.indexOf(lastNote.y)
       
       // Only update if position actually changed
-      setNextNotePosition(newPosition)
-      if (lastNoteLineIndex !== -1) {
-        setCurrentKeyboardLineIndex(lastNoteLineIndex)
-      } else {
-        setCurrentKeyboardLineIndex(0)
+      if (newPosition !== lastNotePositionRef.current.x || lastNote.y !== lastNotePositionRef.current.y) {
+        setNextNotePosition(newPosition)
+        if (lastNoteLineIndex !== -1) {
+          setCurrentKeyboardLineIndex(lastNoteLineIndex)
+        } else {
+          setCurrentKeyboardLineIndex(0)
+        }
+        lastNotePositionRef.current = { x: newPosition, y: lastNote.y }
       }
     } else {
       setNextNotePosition(INITIAL_KEYBOARD_NOTE_X_POSITION)
       setCurrentKeyboardLineIndex(0)
+      lastNotePositionRef.current = { x: INITIAL_KEYBOARD_NOTE_X_POSITION, y: KEYBOARD_LINE_Y_POSITIONS[0] }
     }
   }, [currentPage.notes.length]) // Only depend on the length to prevent infinite loops
 
@@ -1438,11 +1167,11 @@ const ScoreSheet: React.FC<ScoreSheetProps> = ({
     <div
       className="flex-1 bg-gray-100 overflow-auto"
       onClick={() => {
-        if (keyboardEnabled && activeTool === "none") {
+        if (keyboardEnabled) {
           document.body.focus()
         }
       }}
-      tabIndex={keyboardEnabled && activeTool === "none" ? 0 : -1}
+      tabIndex={keyboardEnabled ? 0 : -1}
     >
       <div className="max-w-7xl mx-auto p-8">
         {/* Compact Header */}
@@ -1620,56 +1349,9 @@ const ScoreSheet: React.FC<ScoreSheetProps> = ({
                       Reset Position
                     </button>
 
-                    <div className="my-2 h-px bg-gray-200" />
-                    <div className="px-2 py-1 text-sm font-semibold text-gray-700">Music Notation</div>
-                    <div className="my-1 h-px bg-gray-200" />
-                    <button
-                      onClick={() => {
-                        setShowBarLines(!showBarLines)
-                        setShowToolsDropdown(false)
-                      }}
-                      className={`flex items-center gap-2 w-full text-left px-2 py-1.5 text-sm rounded-sm ${
-                        showBarLines ? "bg-green-100 text-green-700" : "text-gray-700 hover:bg-gray-100"
-                      }`}
-                    >
-                      <div className="w-3 h-3 flex items-center justify-center">
-                        <div className="w-0.5 h-3 bg-current"></div>
-                      </div>
-                      Bar Lines {showBarLines ? "(On)" : "(Off)"}
-                    </button>
-                    <div className="px-2 py-1 text-xs text-gray-500">
-                      Bar Line Spacing: {barLineSpacing}px
-                    </div>
-                    <input
-                      type="range"
-                      min="100"
-                      max="400"
-                      value={barLineSpacing}
-                      onChange={(e) => setBarLineSpacing(Number(e.target.value))}
-                      className="w-full h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer"
-                    />
 
-                    <div className="my-2 h-px bg-gray-200" />
-                    <div className="px-2 py-1 text-sm font-semibold text-gray-700">Drawing Tools</div>
-                    <div className="my-1 h-px bg-gray-200" />
-                    <button
-                      onClick={() => handleToolToggle("pen")}
-                      className={`flex items-center gap-2 w-full text-left px-2 py-1.5 text-sm rounded-sm ${
-                        activeTool === "pen" ? "bg-blue-100 text-blue-700" : "text-gray-700 hover:bg-gray-100"
-                      }`}
-                    >
-                      <Pen className="w-3 h-3" />
-                      Pen {activeTool === "pen" && "(Active)"}
-                    </button>
-                    <button
-                      onClick={() => handleToolToggle("eraser")}
-                      className={`flex items-center gap-2 w-full text-left px-2 py-1.5 text-sm rounded-sm ${
-                        activeTool === "eraser" ? "bg-red-100 text-red-700" : "text-gray-700 hover:bg-gray-100"
-                      }`}
-                    >
-                      <Eraser className="w-3 h-3" />
-                      Eraser {activeTool === "eraser" && "(Active)"}
-                    </button>
+
+
                   </div>
                 )}
               </div>
@@ -1731,7 +1413,7 @@ const ScoreSheet: React.FC<ScoreSheetProps> = ({
         </div>
 
         {/* Status Banner */}
-        {((keyboardEnabled || midiEnabled) && activeTool === "none") ||
+        {(keyboardEnabled || midiEnabled) ||
           isTextMode ||
           isLyricsMode ||
           isHighlighterMode ||
@@ -1747,8 +1429,7 @@ const ScoreSheet: React.FC<ScoreSheetProps> = ({
                   {isHighlighterMode && <span className="text-lg">🎨</span>}
                   {selectedArticulation && <span className="text-lg">♪</span>}
                   {selectedNotation && !keyboardEnabled && !midiEnabled && <Music className="w-4 h-4" />}
-                  {showBarLines && <span className="text-lg">|</span>}
-                  {selectedStemDirection && <span className="text-lg">{selectedStemDirection === 'up' ? '↑' : '↓'}</span>}
+
                   <span className="font-medium">
                     {scoreMode === 'dnr' ? '[DNR Mode] ' : ''}
                     {isTextMode
@@ -1851,67 +1532,39 @@ const ScoreSheet: React.FC<ScoreSheetProps> = ({
           {/* Overlay for interactions */}
           <div
             className="absolute inset-0 z-10"
-            onClick={activeTool === "none" ? handleImageClick : undefined}
+            onClick={handleImageClick}
             onMouseDown={(e) => {
-              handleMouseDown(e)
               handleHighlighterMouseDown(e)
             }}
             onMouseMove={(e) => {
-              handleDrawingMouseMove(e)
               handleNotePlacementMouseMove(e)
               handleNoteMouseMove(e)
               handleTextMouseMove(e)
               handleArticulationMouseMove(e)
               handleLyricMouseMove(e)
-              handleDefaultBarLineMouseMove(e)
               handleHighlighterMouseMove(e)
             }}
             onMouseUp={() => {
-              handleMouseUp()
               handleNoteMouseUp()
               handleTextMouseUp()
               handleArticulationMouseUp()
               handleLyricMouseUp()
-              handleDefaultBarLineMouseUp()
               handleHighlighterMouseUp()
             }}
             onMouseLeave={() => {
-              handleMouseUp()
               handleNoteMouseUp()
               handleTextMouseUp()
               handleArticulationMouseUp()
               handleLyricMouseUp()
-              handleDefaultBarLineMouseUp()
               handleHighlighterMouseUp()
             }}
             style={{
               cursor: getCursorStyle(),
             }}
           >
-            {/* Canvas for drawing */}
-            <canvas
-              ref={canvasRef}
-              className="absolute inset-0 z-30"
-              width={RENDERED_SCORESHEET_WIDTH}
-              height={RENDERED_SCORESHEET_HEIGHT}
-              style={{ pointerEvents: "none" }}
-            />
 
-            {/* Bar Lines */}
-            {showBarLines && generateBarLines().map((barLine, index) => (
-              <div
-                key={`bar-line-${index}`}
-                className="absolute z-10 pointer-events-none"
-                style={{
-                  left: `${barLine.x}px`,
-                  top: `${barLine.y}px`,
-                  width: `${barLine.width}px`,
-                  height: `${barLine.height}px`,
-                  backgroundColor: BAR_LINE_COLOR,
-                  opacity: BAR_LINE_OPACITY,
-                }}
-              />
-            ))}
+
+
 
             {/* Placed notations */}
             {currentPage.notes.map((placedNote) => (
@@ -1929,7 +1582,7 @@ const ScoreSheet: React.FC<ScoreSheetProps> = ({
                 onMouseDown={(e) => {
                   e.stopPropagation()
                   // Only start drag if not in note placement mode
-                  if (!selectedNotation || activeTool !== "none" || isTextMode || isLyricsMode || selectedArticulation || keyboardEnabled || midiEnabled) {
+                  if (!selectedNotation || isTextMode || isLyricsMode || selectedArticulation || keyboardEnabled || midiEnabled) {
                     handleNoteMouseDown(e, placedNote.id)
                   }
                 }}
@@ -1943,7 +1596,7 @@ const ScoreSheet: React.FC<ScoreSheetProps> = ({
                     return
                   }
                   // Delete note on click if in note placement mode
-                  if (selectedNotation && activeTool === "none" && !isTextMode && !isLyricsMode && !selectedArticulation && !keyboardEnabled && !midiEnabled) {
+                  if (selectedNotation && !isTextMode && !isLyricsMode && !selectedArticulation && !keyboardEnabled && !midiEnabled) {
                     onRemoveNote(placedNote.id)
                   }
                 }}
@@ -1963,40 +1616,14 @@ const ScoreSheet: React.FC<ScoreSheetProps> = ({
                       imageRendering: '-webkit-optimize-contrast'
                     }}
                   />
-                  {/* Stem rendering */}
-                  {placedNote.stemDirection && (
-                    <div
-                      className="absolute pointer-events-none"
-                      style={{
-                        left: '50%',
-                        top: placedNote.stemDirection === 'up' ? '0%' : '100%',
-                        width: '2px',
-                        height: `${placedNote.stemLength || 60}px`,
-                        backgroundColor: '#000000',
-                        transform: 'translateX(-50%)',
-                        transformOrigin: placedNote.stemDirection === 'up' ? 'bottom' : 'top',
-                      }}
-                    />
-                  )}
+
                   {/* Drag indicator - only show when selected */}
                   {selectedNoteId === placedNote.id && (
                     <div className="absolute -top-2 -left-2 w-4 h-4 bg-blue-500 text-white rounded-full opacity-100 transition-all duration-300 flex items-center justify-center text-xs font-bold shadow-lg">
                       ⋮⋮
                     </div>
                   )}
-                  {/* Stem direction toggle button - only show when selected */}
-                  {selectedNoteId === placedNote.id && (
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        toggleStemDirection(placedNote.id)
-                      }}
-                      className="absolute -top-3 -left-3 w-6 h-6 bg-blue-500 text-white rounded-full opacity-100 transition-all duration-300 flex items-center justify-center text-xs font-bold shadow-lg hover:bg-blue-600"
-                      title={`Toggle stem direction (currently ${placedNote.stemDirection || 'auto'})`}
-                    >
-                      {placedNote.stemDirection === 'up' ? '↑' : placedNote.stemDirection === 'down' ? '↓' : '↕'}
-                    </button>
-                  )}
+
                   {/* Delete button - only show when selected */}
                   {selectedNoteId === placedNote.id && (
                     <button
@@ -2157,67 +1784,10 @@ const ScoreSheet: React.FC<ScoreSheetProps> = ({
               </div>
             ))}
 
-            {/* Default bar lines */}
-            {defaultBarLines.map((defaultBarLine) => {
-              const yPosition = KEYBOARD_LINE_Y_POSITIONS[defaultBarLine.lineIndex]
-              return (
-                <div
-                  key={defaultBarLine.id}
-                  className="absolute group z-15 select-none"
-                  style={{
-                    left: `${defaultBarLine.x}px`,
-                    top: `${yPosition}px`,
-                    transform: "translateX(-50%)",
-                    cursor: draggedDefaultBarLineId === defaultBarLine.id ? "grabbing" : "grab",
-                  }}
-                  onMouseDown={(e) => handleDefaultBarLineMouseDown(e, defaultBarLine.id)}
-                  onMouseMove={handleDefaultBarLineMouseMove}
-                  onMouseUp={handleDefaultBarLineMouseUp}
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    setSelectedLineIndex(defaultBarLine.lineIndex)
-                    setShowDefaultBarLinesDialog(true)
-                  }}
-                >
-                  <div className="relative">
-                    <div 
-                      className="flex items-center justify-center"
-                      style={{ height: 65 }}
-                    >
-                      <span 
-                        className="text-gray-800 font-light drop-shadow-md"
-                        style={{ 
-                          fontSize: '65px',
-                          lineHeight: '1',
-                          display: 'block',
-                        }}
-                      >
-                        {defaultBarLine.count === 1 ? '|' : '||'}
-                      </span>
-                    </div>
-                    
-                    {/* Delete button */}
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        onRemoveDefaultBarLine?.(defaultBarLine.id)
-                      }}
-                      className="absolute -top-2 -right-2 w-5 h-5 bg-red-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition-all duration-300 flex items-center justify-center text-xs font-bold shadow-lg hover:bg-red-600"
-                    >
-                      &times;
-                    </button>
-                    
-                    {/* Count indicator */}
-                    <div className="absolute -top-2 -left-2 w-5 h-5 bg-blue-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition-all duration-300 flex items-center justify-center text-xs font-bold shadow-lg">
-                      {defaultBarLine.count}
-                    </div>
-                  </div>
-                </div>
-              )
-            })}
+
 
             {/* Next note position indicator */}
-            {(keyboardEnabled || midiEnabled) && activeTool === "none" && !isTextMode && !isLyricsMode && !selectedArticulation && (
+            {(keyboardEnabled || midiEnabled) && !isTextMode && !isLyricsMode && !selectedArticulation && (
               <div
                 className="absolute w-px h-6 bg-blue-400 opacity-100 animate-pulse z-20 translate-y-1/2"
                 style={{
@@ -2228,7 +1798,7 @@ const ScoreSheet: React.FC<ScoreSheetProps> = ({
             )}
 
             {/* Mouse cursor indicator for note placement */}
-            {selectedNotation && activeTool === "none" && !isTextMode && !selectedArticulation && !keyboardEnabled && !midiEnabled && (
+            {selectedNotation && !isTextMode && !selectedArticulation && !keyboardEnabled && !midiEnabled && (
               <div
                 className="absolute w-8 h-8 bg-blue-500 bg-opacity-30 border-2 border-blue-500 rounded-full z-20 pointer-events-none"
                 style={{
@@ -2252,7 +1822,7 @@ const ScoreSheet: React.FC<ScoreSheetProps> = ({
             )}
 
             {/* Note preview at cursor position */}
-            {selectedNotation && activeTool === "none" && !isTextMode && !isLyricsMode && !selectedArticulation && !keyboardEnabled && !midiEnabled && (
+            {selectedNotation && !isTextMode && !isLyricsMode && !selectedArticulation && !keyboardEnabled && !midiEnabled && (
               <div
                 className="absolute z-20 pointer-events-none opacity-50"
                 style={{
@@ -2471,111 +2041,7 @@ const ScoreSheet: React.FC<ScoreSheetProps> = ({
         </div>
       )}
 
-      {/* Default Bar Lines Dialog Modal */}
-      {showDefaultBarLinesDialog && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full border border-gray-200">
-            <div className="p-6">
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">
-                  <span className="text-lg">|</span>
-                  Default Bar Lines Configuration
-                </h2>
-                <button
-                  onClick={() => setShowDefaultBarLinesDialog(false)}
-                  className="text-gray-500 hover:text-gray-700 text-2xl font-bold"
-                >
-                  &times;
-                </button>
-              </div>
 
-              <div className="space-y-4">
-                <p className="text-sm text-gray-600">
-                  Configure default bar lines for each of the 11 keyboard lines. You can set the number of bar lines and their horizontal position.
-                </p>
-                
-                <div className="grid grid-cols-1 gap-4 max-h-96 overflow-y-auto">
-                  {KEYBOARD_LINE_Y_POSITIONS.map((yPosition, index) => {
-                    const existingBarLine = defaultBarLines.find(dbl => dbl.lineIndex === index)
-                    return (
-                      <div key={index} className="flex items-center gap-4 p-3 border border-gray-200 rounded-lg">
-                        <div className="flex-1">
-                          <label className="block text-sm font-medium text-gray-700 mb-1">
-                            Line {index + 1} (Y: {yPosition}px)
-                          </label>
-                          <div className="flex items-center gap-2">
-                            <input
-                              type="number"
-                              min="0"
-                              max="10"
-                              value={existingBarLine?.count || 0}
-                              onChange={(e) => {
-                                const count = parseInt(e.target.value) || 0
-                                if (count > 0) {
-                                  if (existingBarLine) {
-                                    onUpdateDefaultBarLine?.(existingBarLine.id, { count })
-                                  } else {
-                                    onAddDefaultBarLine?.({
-                                      id: Date.now().toString(),
-                                      lineIndex: index,
-                                      x: 400, // Default position
-                                      count,
-                                      isVisible: true
-                                    })
-                                  }
-                                } else if (existingBarLine) {
-                                  onRemoveDefaultBarLine?.(existingBarLine.id)
-                                }
-                              }}
-                              className="w-16 p-2 border border-gray-300 rounded text-center"
-                              placeholder="0"
-                            />
-                            <span className="text-sm text-gray-600">bar lines</span>
-                            {existingBarLine && (
-                              <input
-                                type="number"
-                                min="50"
-                                max="800"
-                                value={existingBarLine.x}
-                                onChange={(e) => {
-                                  const x = parseInt(e.target.value) || 400
-                                  onUpdateDefaultBarLine?.(existingBarLine.id, { x })
-                                }}
-                                className="w-20 p-2 border border-gray-300 rounded text-center"
-                                placeholder="X pos"
-                              />
-                            )}
-                            {existingBarLine && (
-                              <span className="text-sm text-gray-600">X position</span>
-                            )}
-                          </div>
-                        </div>
-                        {existingBarLine && (
-                          <button
-                            onClick={() => onRemoveDefaultBarLine?.(existingBarLine.id)}
-                            className="px-3 py-1 bg-red-500 text-white rounded hover:bg-red-600 text-sm"
-                          >
-                            Remove
-                          </button>
-                        )}
-                      </div>
-                    )
-                  })}
-                </div>
-
-                <div className="flex gap-3 pt-4">
-                  <button
-                    onClick={() => setShowDefaultBarLinesDialog(false)}
-                    className="flex-1 bg-gray-300 text-gray-700 py-2 px-4 rounded-lg hover:bg-gray-400 transition-all duration-200 font-medium"
-                  >
-                    Close
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Keyboard Help Modal */}
       {showKeyboardHelp && (

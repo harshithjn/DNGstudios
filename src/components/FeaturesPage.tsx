@@ -1,5 +1,5 @@
 import React from 'react'
-import { ArrowLeft, Music2, Keyboard, Mouse, Piano, Type, Pen, Download, RotateCcw, Settings, FileText, Star, Brain, Shield, Code, Play, Clock, Palette, Layers, Share2, Database, Cloud, Lock, Smartphone, Monitor } from 'lucide-react'
+import { ArrowLeft, Keyboard, Mouse, Piano, Type, Download, RotateCcw, Settings, FileText, Brain, Shield, Code, Play, Palette, Layers, Share2, Database, Smartphone } from 'lucide-react'
 
 interface FeaturesPageProps {
   onBackToLanding: () => void

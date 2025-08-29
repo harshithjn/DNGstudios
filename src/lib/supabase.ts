@@ -13,6 +13,7 @@ export interface NotePage {
   composer?: string
   description?: string
   project_type?: string
+  metadata?: any // For storing additional data like default bar lines
   created_at: string
 }
 
@@ -100,6 +101,32 @@ export const notePagesApi = {
     return data
   },
 
+  // Load project metadata (including default bar lines)
+  async loadMetadata(id: string): Promise<any> {
+    try {
+      const { data, error } = await supabase
+        .from('note_pages')
+        .select('metadata')
+        .eq('id', id)
+        .single()
+      
+      if (error) {
+        // If metadata column doesn't exist, return empty object
+        if (error.code === '42703') {
+          console.log('Metadata column not found, returning empty object')
+          return {}
+        }
+        console.error('Error loading project metadata:', error)
+        return {}
+      }
+      
+      return data?.metadata || {}
+    } catch (err) {
+      console.error('Unexpected error loading metadata:', err)
+      return {}
+    }
+  },
+
   // Update a note page
   async update(id: string, updates: Partial<NotePage>): Promise<NotePage | null> {
     const { data, error } = await supabase
@@ -115,6 +142,31 @@ export const notePagesApi = {
     }
     
     return data
+  },
+
+  // Save project metadata (including default bar lines)
+  async saveMetadata(id: string, metadata: any): Promise<boolean> {
+    try {
+      const { error } = await supabase
+        .from('note_pages')
+        .update({ metadata })
+        .eq('id', id)
+      
+      if (error) {
+        // If metadata column doesn't exist, just log and return true
+        if (error.code === '42703') {
+          console.log('Metadata column not found, skipping save')
+          return true
+        }
+        console.error('Error saving project metadata:', error)
+        return false
+      }
+      
+      return true
+    } catch (err) {
+      console.error('Unexpected error saving metadata:', err)
+      return false
+    }
   },
 
   // Delete a note page

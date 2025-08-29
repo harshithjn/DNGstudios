@@ -59,13 +59,7 @@ export interface HighlighterElement {
   opacity: number
 }
 
-export interface DefaultBarLine {
-  id: string
-  lineIndex: number // Index in KEYBOARD_LINE_Y_POSITIONS array
-  x: number // Horizontal position
-  count: number // Number of bar lines at this position
-  isVisible: boolean
-}
+
 
 function App() {
   const [showLandingPage, setShowLandingPage] = useState(() => {
@@ -101,7 +95,7 @@ function App() {
   const [articulationElements, setArticulationElements] = useState<ArticulationElement[]>([])
   const [lyricElements, setLyricElements] = useState<LyricElement[]>([])
   const [highlighterElements, setHighlighterElements] = useState<HighlighterElement[]>([])
-  const [defaultBarLines, setDefaultBarLines] = useState<DefaultBarLine[]>([])
+
   const [scoreMode, setScoreMode] = useState<ScoreMode>('normal')
   const [layoutSettings, setLayoutSettings] = useState<LayoutSettings>({
     topMargin: 0.50,
@@ -128,7 +122,7 @@ function App() {
     hideMutedTracks: false,
   })
 
-  const { loadScorePage, saveNotes, addNote, removeNote, updateProject } = useSupabase()
+  const { loadScorePage, saveNotes, addNote, removeNote, updateProject, saveProjectMetadata, loadProjectMetadata } = useSupabase()
 
   // Initialize unified undo/redo system
   const {
@@ -143,7 +137,7 @@ function App() {
     notes: currentProject?.notes || [],
     textElements: textElements || [],
     articulationElements: articulationElements || [],
-    defaultBarLines: defaultBarLines || [],
+    
     timestamp: Date.now()
   })
 
@@ -178,7 +172,6 @@ function App() {
         notes: currentProject.notes,
         textElements: [],
         articulationElements: [],
-        defaultBarLines: [],
         timestamp: Date.now()
       })
     }
@@ -214,6 +207,9 @@ function App() {
   const handleOpenProject = useCallback(async (projectId: string, projectType: "DNG" | "DNR") => {
     const loadedProject = await loadScorePage(projectId)
     if (loadedProject) {
+      // Load project metadata
+      const metadata = await loadProjectMetadata(projectId)
+      
       // Initialize with a single page if no pages exist
       const initialPages = [loadedProject]
       setPages(initialPages)
@@ -222,12 +218,18 @@ function App() {
       setCurrentPageIndex(0)
       // Set the score mode based on project type
       setScoreMode(projectType === 'DNR' ? 'dnr' : 'normal')
+      
+      // Load saved elements from metadata
+      setTextElements(metadata?.textElements || [])
+      setArticulationElements(metadata?.articulationElements || [])
+      setLyricElements(metadata?.lyricElements || [])
+      setHighlighterElements(metadata?.highlighterElements || [])
+      
       // Reset undo/redo history with loaded project
       resetHistory({
         notes: loadedProject.notes,
-        textElements: [],
-        articulationElements: [],
-        defaultBarLines: [],
+        textElements: metadata?.textElements || [],
+        articulationElements: metadata?.articulationElements || [],
         timestamp: Date.now()
       })
       // Persist to localStorage
@@ -235,11 +237,18 @@ function App() {
       localStorage.setItem('currentProject', JSON.stringify(loadedProject))
       localStorage.setItem('projectPages', JSON.stringify(initialPages))
     }
-  }, [loadScorePage, resetHistory])
+  }, [loadScorePage, loadProjectMetadata, resetHistory])
 
   const handleBackToHome = async () => {
     if (currentProject && currentProjectId) {
       await saveNotes(currentProjectId, currentProject.notes)
+      // Save project metadata
+      await saveProjectMetadata(currentProjectId, {
+        textElements,
+        articulationElements,
+        lyricElements,
+        highlighterElements
+      })
     }
     setCurrentProjectId(null)
     setCurrentProject(null)
@@ -288,8 +297,6 @@ function App() {
             notes: newNotes,
             textElements: textElements,
             articulationElements: articulationElements,
-            defaultBarLines: defaultBarLines, // Preserve articulation elements
-            defaultBarLines: defaultBarLines,
             timestamp: Date.now()
           })
           
@@ -318,7 +325,6 @@ function App() {
             notes: newNotes,
             textElements: textElements,
             articulationElements: articulationElements,
-            defaultBarLines: defaultBarLines, // Preserve articulation elements
             timestamp: Date.now()
           })
         }
@@ -346,7 +352,7 @@ function App() {
           notes: newNotes,
           textElements: textElements,
           articulationElements: articulationElements,
-            defaultBarLines: defaultBarLines, // Preserve articulation elements
+            
           timestamp: Date.now()
         })
       }
@@ -388,7 +394,7 @@ function App() {
             notes: newNotes,
             textElements: textElements,
             articulationElements: articulationElements,
-            defaultBarLines: defaultBarLines, // Preserve articulation elements
+            
             timestamp: Date.now()
           })
           
@@ -415,7 +421,7 @@ function App() {
             notes: newNotes,
             textElements: textElements,
             articulationElements: articulationElements,
-            defaultBarLines: defaultBarLines, // Preserve articulation elements
+            
             timestamp: Date.now()
           })
         }
@@ -442,7 +448,7 @@ function App() {
           notes: newNotes,
           textElements: textElements,
           articulationElements: articulationElements,
-            defaultBarLines: defaultBarLines, // Preserve articulation elements
+            
           timestamp: Date.now()
         })
       }
@@ -475,7 +481,7 @@ function App() {
         notes: newNotes,
         textElements: textElements,
         articulationElements: articulationElements,
-            defaultBarLines: defaultBarLines, // Preserve articulation elements
+            
         timestamp: Date.now()
       })
     }
@@ -504,7 +510,7 @@ function App() {
           notes: [],
           textElements: textElements,
           articulationElements: articulationElements,
-            defaultBarLines: defaultBarLines, // Preserve articulation elements
+            
           timestamp: Date.now()
         })
       }
@@ -537,7 +543,7 @@ function App() {
               notes: currentProject.notes,
               textElements: textElements,
               articulationElements: articulationElements,
-            defaultBarLines: defaultBarLines,
+            
               lyricElements: lyricElements,
               highlighterElements: highlighterElements
             }
@@ -567,14 +573,13 @@ function App() {
         notes: [],
         textElements: [],
         articulationElements: [],
-        defaultBarLines: [],
+        
         timestamp: Date.now()
       })
       
       // Clear all elements for the new page
       setTextElements([])
       setArticulationElements([])
-      setDefaultBarLines([])
       setLyricElements([])
       setHighlighterElements([])
       
@@ -594,7 +599,7 @@ function App() {
                   notes: currentProject?.notes || [],
                   textElements: textElements,
                   articulationElements: articulationElements,
-                  defaultBarLines: defaultBarLines,
+
                   lyricElements: lyricElements,
                   highlighterElements: highlighterElements
                 }
@@ -611,7 +616,6 @@ function App() {
       // Load the page's saved elements
       setTextElements(selectedPage.textElements || [])
       setArticulationElements(selectedPage.articulationElements || [])
-      setDefaultBarLines(selectedPage.defaultBarLines || [])
       setLyricElements(selectedPage.lyricElements || [])
       setHighlighterElements(selectedPage.highlighterElements || [])
       
@@ -620,7 +624,7 @@ function App() {
         notes: selectedPage.notes,
         textElements: selectedPage.textElements || [],
         articulationElements: selectedPage.articulationElements || [],
-        defaultBarLines: selectedPage.defaultBarLines || [],
+
         timestamp: Date.now()
       })
       
@@ -650,7 +654,7 @@ function App() {
     }
   }
 
-  const handleAddTextElement = (textElement: TextElement) => {
+    const handleAddTextElement = (textElement: TextElement) => {
     const newTextElements = [...textElements, textElement]
     setTextElements(newTextElements)
     
@@ -659,9 +663,19 @@ function App() {
       notes: currentProject?.notes || [],
       textElements: newTextElements,
       articulationElements: articulationElements,
-            defaultBarLines: defaultBarLines,
+      
       timestamp: Date.now()
     })
+    
+    // Save to database
+    if (currentProjectId) {
+      saveProjectMetadata(currentProjectId, {
+        textElements: newTextElements,
+        articulationElements,
+        lyricElements,
+        highlighterElements
+      })
+    }
   }
 
   const handleRemoveTextElement = (id: string) => {
@@ -673,7 +687,7 @@ function App() {
       notes: currentProject?.notes || [],
       textElements: newTextElements,
       articulationElements: articulationElements,
-            defaultBarLines: defaultBarLines,
+            
       timestamp: Date.now()
     })
   }
@@ -687,7 +701,7 @@ function App() {
       notes: currentProject?.notes || [],
       textElements: newTextElements,
       articulationElements: articulationElements,
-            defaultBarLines: defaultBarLines,
+            
       timestamp: Date.now()
     })
   }
@@ -731,50 +745,11 @@ function App() {
     })
   }
 
-  const handleAddDefaultBarLine = (defaultBarLine: DefaultBarLine) => {
-    const newDefaultBarLines = [...defaultBarLines, defaultBarLine]
-    setDefaultBarLines(newDefaultBarLines)
-    
-    // Push to unified history
-    pushHistoryState({
-      notes: currentProject?.notes || [],
-      textElements: textElements,
-      articulationElements: articulationElements,
-            defaultBarLines: defaultBarLines,
-      defaultBarLines: newDefaultBarLines,
-      timestamp: Date.now()
-    })
-  }
 
-  const handleRemoveDefaultBarLine = (id: string) => {
-    const newDefaultBarLines = defaultBarLines.filter(el => el.id !== id)
-    setDefaultBarLines(newDefaultBarLines)
-    
-    // Push to unified history
-    pushHistoryState({
-      notes: currentProject?.notes || [],
-      textElements: textElements,
-      articulationElements: articulationElements,
-            defaultBarLines: defaultBarLines,
-      defaultBarLines: newDefaultBarLines,
-      timestamp: Date.now()
-    })
-  }
 
-  const handleUpdateDefaultBarLine = (id: string, updates: Partial<DefaultBarLine>) => {
-    const newDefaultBarLines = defaultBarLines.map(el => el.id === id ? { ...el, ...updates } : el)
-    setDefaultBarLines(newDefaultBarLines)
-    
-    // Push to unified history
-    pushHistoryState({
-      notes: currentProject?.notes || [],
-      textElements: textElements,
-      articulationElements: articulationElements,
-            defaultBarLines: defaultBarLines,
-      defaultBarLines: newDefaultBarLines,
-      timestamp: Date.now()
-    })
-  }
+
+
+
 
   const handleAddLyric = (lyric: LyricElement) => {
     const newLyricElements = [...lyricElements, lyric]
@@ -785,7 +760,7 @@ function App() {
       notes: currentProject?.notes || [],
       textElements: textElements,
       articulationElements: articulationElements,
-            defaultBarLines: defaultBarLines,
+            
       timestamp: Date.now()
     })
   }
@@ -799,7 +774,7 @@ function App() {
       notes: currentProject?.notes || [],
       textElements: textElements,
       articulationElements: articulationElements,
-            defaultBarLines: defaultBarLines,
+            
       timestamp: Date.now()
     })
   }
@@ -813,7 +788,7 @@ function App() {
       notes: currentProject?.notes || [],
       textElements: textElements,
       articulationElements: articulationElements,
-            defaultBarLines: defaultBarLines,
+            
       timestamp: Date.now()
     })
   }
@@ -827,7 +802,7 @@ function App() {
       notes: currentProject?.notes || [],
       textElements: textElements,
       articulationElements: articulationElements,
-            defaultBarLines: defaultBarLines,
+            
       timestamp: Date.now()
     })
   }
@@ -841,7 +816,7 @@ function App() {
       notes: currentProject?.notes || [],
       textElements: textElements,
       articulationElements: articulationElements,
-            defaultBarLines: defaultBarLines,
+            
       timestamp: Date.now()
     })
   }
@@ -855,7 +830,7 @@ function App() {
       notes: currentProject?.notes || [],
       textElements: textElements,
       articulationElements: articulationElements,
-            defaultBarLines: defaultBarLines,
+            
       timestamp: Date.now()
     })
   }
@@ -940,7 +915,7 @@ function App() {
         setArticulationElements(historyState.articulationElements)
       }
     }
-  }, [historyState, currentProject, textElements, articulationElements, setTextElements, setArticulationElements, currentPageIndex])
+  }, [historyState, currentPageIndex])
 
   // Auto-save notes when they change
   useEffect(() => {
@@ -957,7 +932,7 @@ function App() {
                 notes: currentProject.notes,
                 textElements: textElements,
                 articulationElements: articulationElements,
-            defaultBarLines: defaultBarLines,
+            
                 lyricElements: lyricElements,
                 highlighterElements: highlighterElements
               }
@@ -1098,10 +1073,7 @@ function App() {
             onAddHighlighter={handleAddHighlighter}
             onRemoveHighlighter={handleRemoveHighlighter}
             onUpdateHighlighter={handleUpdateHighlighter}
-            defaultBarLines={defaultBarLines}
-            onAddDefaultBarLine={handleAddDefaultBarLine}
-            onRemoveDefaultBarLine={handleRemoveDefaultBarLine}
-            onUpdateDefaultBarLine={handleUpdateDefaultBarLine}
+
             layoutSettings={layoutSettings}
             onUpdateLayoutSettings={handleUpdateLayoutSettings}
             canUndo={canUndoAction}
