@@ -10,7 +10,10 @@ interface NotationPaletteProps {
   onNotationSelect: (notation: Notation) => void
 }
 
-const NotationPalette: React.FC<NotationPaletteProps> = ({ selectedNotation, onNotationSelect }) => {
+const NotationPalette: React.FC<NotationPaletteProps> = ({ 
+  selectedNotation, 
+  onNotationSelect
+}) => {
   const [showCase, setShowCase] = useState<"lowercase" | "uppercase" | "all">("all")
   const [searchTerm, setSearchTerm] = useState("")
 
@@ -152,6 +155,8 @@ const NotationPalette: React.FC<NotationPaletteProps> = ({ selectedNotation, onN
               <p className="text-slate-500 text-xs">Try adjusting your search or filter</p>
             </div>
           )}
+
+
         </div>
       </div>
 

@@ -46,11 +46,6 @@ export const useSupabase = () => {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
-  // Load projects on component mount
-  useEffect(() => {
-    loadProjects()
-  }, [])
-
   // Load all projects
   const loadProjects = useCallback(async () => {
     try {
@@ -102,6 +97,11 @@ export const useSupabase = () => {
     }
   }, [])
 
+  // Load projects on component mount
+  useEffect(() => {
+    loadProjects()
+  }, [loadProjects])
+
   // Create a new project
   const createProject = useCallback(async (
     title: string,
@@ -129,7 +129,7 @@ export const useSupabase = () => {
       setError('Failed to create project')
       return null
     }
-  }, [])
+  }, [loadProjects])
 
   // Delete a project
   const deleteProject = useCallback(async (projectId: string): Promise<boolean> => {
@@ -158,7 +158,7 @@ export const useSupabase = () => {
       setError('Failed to delete project')
       return false
     }
-  }, [])
+  }, [loadProjects])
 
   // Load a specific project/score page
   const loadScorePage = useCallback(async (projectId: string): Promise<ScorePage | null> => {

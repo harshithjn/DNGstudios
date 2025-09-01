@@ -12,7 +12,7 @@ interface RightSidebarProps {
   isTextMode: boolean
   onTextModeToggle: (enabled: boolean) => void
   currentPage: ScorePage
-  onUpdatePageSettings: (settings: Partial<ScorePage>) => void
+
   lyricElements: LyricElement[]
   onAddLyric: (lyric: LyricElement) => void
   onRemoveLyric: (id: string) => void
@@ -24,9 +24,9 @@ interface RightSidebarProps {
   selectedHighlighterColor: 'red' | 'green' | 'blue' | 'yellow'
   onHighlighterColorChange: (color: 'red' | 'green' | 'blue' | 'yellow') => void
   highlighterElements: HighlighterElement[]
-  onAddHighlighter: (highlighter: HighlighterElement) => void
+
   onRemoveHighlighter: (id: string) => void
-  onUpdateHighlighter: (id: string, updates: Partial<HighlighterElement>) => void
+
   layoutSettings: LayoutSettings
   onUpdateLayoutSettings: (settings: Partial<LayoutSettings>) => void
 }
@@ -57,7 +57,7 @@ const RightSidebar: React.FC<RightSidebarProps> = ({
   isTextMode = false,
   onTextModeToggle = () => {},
   currentPage = {} as ScorePage,
-  onUpdatePageSettings = () => {},
+
   lyricElements = [],
   onAddLyric = () => {},
   onRemoveLyric = () => {},
@@ -69,9 +69,9 @@ const RightSidebar: React.FC<RightSidebarProps> = ({
   selectedHighlighterColor = 'yellow',
   onHighlighterColorChange = () => {},
   highlighterElements = [],
-  onAddHighlighter = () => {},
+
   onRemoveHighlighter = () => {},
-  onUpdateHighlighter = () => {},
+
   layoutSettings = {
     topMargin: 0.50,
     bottomMargin: 0.50,
@@ -100,7 +100,7 @@ const RightSidebar: React.FC<RightSidebarProps> = ({
 }) => {
   const [metronomeEnabled, setMetronomeEnabled] = useState(false)
   const [metronomeInterval, setMetronomeInterval] = useState<ReturnType<typeof setInterval> | null>(null)
-  const [activeTool, setActiveTool] = useState<"none" | "eraser">("none")
+
   const [showLyricsDialog, setShowLyricsDialog] = useState(false)
   const [editingLyric, setEditingLyric] = useState<LyricElement | null>(null)
   const [lyricText, setLyricText] = useState("")

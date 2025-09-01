@@ -17,7 +17,8 @@ import {
 import { notations, getNotationByKey, type Notation } from "../data/notations"
 import html2canvas from "html2canvas"
 import jsPDF from "jspdf"
-import type { TextElement, ArticulationElement } from "../App"
+import type { TextElement, ArticulationElement, LyricElement, HighlighterElement } from "../App"
+import type { LayoutSettings } from "./LayoutSettings"
 import PianoComponent from "./Piano"
 import { useCursorNavigation } from "../hooks/useCursorNavigation"
 
@@ -60,10 +61,24 @@ interface DNRScoresheetProps {
   onUpdateArticulation?: (id: string, updates: Partial<ArticulationElement>) => void
   selectedArticulation: string | null
   isTextMode: boolean
+  isLyricsMode?: boolean
+  isHighlighterMode?: boolean
+  selectedHighlighterColor?: 'red' | 'green' | 'blue' | 'yellow'
+  lyricElements?: LyricElement[]
+  onAddLyric?: (lyric: LyricElement) => void
+  onRemoveLyric?: (id: string) => void
+  onUpdateLyric?: (id: string, updates: Partial<LyricElement>) => void
+  highlighterElements?: HighlighterElement[]
+  onAddHighlighter?: (highlighter: HighlighterElement) => void
+  onRemoveHighlighter?: (id: string) => void
+  onUpdateHighlighter?: (id: string, updates: Partial<HighlighterElement>) => void
+  layoutSettings?: LayoutSettings
+  onUpdateLayoutSettings?: (settings: Partial<LayoutSettings>) => void
   canUndo?: boolean
   canRedo?: boolean
   onUndo?: () => void
   onRedo?: () => void
+  onAddPage?: () => void
 }
 
 const A4_WIDTH_PX = 794
@@ -79,6 +94,12 @@ const KEYBOARD_LINE_Y_POSITIONS = [250, 380, 510, 640, 770, 900, 1030, 1160, 129
 
 const NOTE_BOUNDARY_LEFT = INITIAL_KEYBOARD_NOTE_X_POSITION
 const NOTE_BOUNDARY_RIGHT = 1200
+
+// Bar line constants
+const BAR_LINE_COLOR = '#666'
+const BAR_LINE_OPACITY = 0.6
+
+
 
 
 
@@ -189,6 +210,27 @@ const DNRScoresheet: React.FC<DNRScoresheetProps> = ({
   const [newTextBold, setNewTextBold] = useState(false)
   const [newTextItalic, setNewTextItalic] = useState(false)
   const [newTextUnderline, setNewTextUnderline] = useState(false)
+  const [isStemMode, setIsStemMode] = useState(false)
+  const [selectedStem, setSelectedStem] = useState<string | null>(null)
+  const [showBarLines, setShowBarLines] = useState(false)
+  const [barLineSpacing, setBarLineSpacing] = useState(200)
+
+  // Generate bar lines function
+  const generateBarLines = useCallback(() => {
+    if (!showBarLines) return []
+    
+    const lines = []
+    for (let x = NOTE_BOUNDARY_LEFT; x < NOTE_BOUNDARY_RIGHT; x += barLineSpacing) {
+      lines.push({
+        id: `bar-line-${x}`,
+        x: x,
+        y: KEYBOARD_LINE_Y_POSITIONS[0] - 50,
+        height: KEYBOARD_LINE_Y_POSITIONS[KEYBOARD_LINE_Y_POSITIONS.length - 1] + 50,
+        width: 2
+      })
+    }
+    return lines
+  }, [showBarLines, barLineSpacing])
 
 
   // Drag state for notes
@@ -217,9 +259,7 @@ const DNRScoresheet: React.FC<DNRScoresheetProps> = ({
   
 
 
-  const canvasRef = useRef<HTMLCanvasElement>(null)
-  const isInteracting = useRef(false)
-  const currentLine = useRef<Array<{ x: number; y: number }>>([])
+
   const midiTimeoutRef = useRef<{ [key: number]: number }>({})
 
   // Initialize cursor navigation
@@ -412,8 +452,18 @@ const DNRScoresheet: React.FC<DNRScoresheetProps> = ({
       let finalX = customX ?? nextNotePosition
       let finalY = customY ?? currentKeyboardLineY
 
-      // If custom position is provided, use it directly
+      // If custom position is provided, snap to nearest keyboard line
       if (customX !== undefined && customY !== undefined) {
+        // Find the closest keyboard line Y position
+        const closestLineIndex = KEYBOARD_LINE_Y_POSITIONS.reduce((closest, current, index) => {
+          const distance = Math.abs(current - customY)
+          const closestDistance = Math.abs(KEYBOARD_LINE_Y_POSITIONS[closest] - customY)
+          return distance < closestDistance ? index : closest
+        }, 0)
+        
+        finalY = KEYBOARD_LINE_Y_POSITIONS[closestLineIndex]
+        setCurrentKeyboardLineIndex(closestLineIndex)
+        
         const newNote: PlacedNotation = {
           id: Date.now().toString(),
           notation: mappedNotation,
@@ -426,12 +476,6 @@ const DNRScoresheet: React.FC<DNRScoresheetProps> = ({
         
         // Update cursor position to after the placed note
         setNextNotePosition(finalX + NOTATION_KEYBOARD_X_INCREMENT)
-        
-        // Update keyboard line position based on the placed note
-        const lineIndex = KEYBOARD_LINE_Y_POSITIONS.findIndex(y => Math.abs(y - finalY) < 10)
-        if (lineIndex !== -1) {
-          setCurrentKeyboardLineIndex(lineIndex)
-        }
         return
       }
 
@@ -452,7 +496,8 @@ const DNRScoresheet: React.FC<DNRScoresheetProps> = ({
 
       // Ensure proper alignment to grid for better PDF export
       finalX = Math.round(finalX / 10) * 10
-      finalY = Math.round(finalY / 10) * 10
+      // Always use exact keyboard line Y position for consistent placement
+      finalY = KEYBOARD_LINE_Y_POSITIONS[currentKeyboardLineIndex]
 
       const newNote: PlacedNotation = {
         id: Date.now().toString(),
@@ -496,6 +541,14 @@ const DNRScoresheet: React.FC<DNRScoresheetProps> = ({
       }
 
       const key = event.key
+      
+      // Handle Escape key to clear note selection
+      if (key === "Escape") {
+        event.preventDefault()
+        setSelectedNoteId(null)
+        return
+      }
+      
       const mappedNotation = getNotationByKey(key)
 
 
@@ -584,6 +637,28 @@ const DNRScoresheet: React.FC<DNRScoresheetProps> = ({
     if (isTextMode) {
       setTextDialogPosition({ x, y })
       setShowTextDialog(true)
+      return
+    }
+
+    if (isStemMode && selectedStem) {
+      // In stem mode, place the selected stem image
+      if (onAddArticulation) {
+        const newStemElement: ArticulationElement = {
+          id: Date.now().toString(),
+          type: 'stem',
+          name: selectedStem,
+          symbol: selectedStem,
+          x: Math.max(20, Math.min(x, rect.width - 20)),
+          y: Math.max(20, Math.min(y, rect.height - 20)),
+          height: 100, // Default height for stem images
+          isExtensible: true,
+        }
+        try {
+          onAddArticulation(newStemElement)
+        } catch (error) {
+          console.warn('onAddArticulation not available:', error)
+        }
+      }
       return
     }
 
@@ -846,8 +921,16 @@ const DNRScoresheet: React.FC<DNRScoresheetProps> = ({
     }
   }, [keyboardEnabled])
 
+  // Handle background click to clear note selection
+  const handleBackgroundClick = (e: React.MouseEvent) => {
+    // Only clear selection if clicking on the background, not on notes or other elements
+    if (e.target === e.currentTarget) {
+      setSelectedNoteId(null)
+    }
+  }
+
   return (
-    <div className="flex-1 bg-gray-100 overflow-auto">
+    <div className="flex-1 bg-gray-100 overflow-auto" onClick={handleBackgroundClick}>
       <div className="max-w-7xl mx-auto p-8">
         {/* Compact Header */}
         <div className="bg-white rounded-xl shadow-lg border border-gray-200 mb-6">
@@ -1005,7 +1088,7 @@ const DNRScoresheet: React.FC<DNRScoresheetProps> = ({
                         handleClearAll()
                         setShowToolsDropdown(false)
                       }}
-                      disabled={currentPage.notes.length === 0 && drawingLines.length === 0}
+                      disabled={currentPage.notes.length === 0}
                       className="flex items-center gap-2 w-full text-left px-2 py-1.5 text-sm text-gray-700 hover:bg-gray-100 rounded-sm disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       <Trash2 className="w-3 h-3" />
@@ -1021,6 +1104,78 @@ const DNRScoresheet: React.FC<DNRScoresheetProps> = ({
                     >
                       <RotateCcw className="w-3 h-3" />
                       Reset Position
+                    </button>
+                    <button
+                      onClick={() => {
+                        setIsStemMode(!isStemMode)
+                        setShowToolsDropdown(false)
+                        // Reset other modes
+                        setSelectedStem(null)
+                      }}
+                      className={`flex items-center gap-2 w-full text-left px-2 py-1.5 text-sm rounded-sm ${
+                        isStemMode 
+                          ? "bg-blue-100 text-blue-700 hover:bg-blue-200" 
+                          : "text-gray-700 hover:bg-gray-100"
+                      }`}
+                    >
+                      <Music className="w-3 h-3" />
+                      Stem
+                    </button>
+                    <button
+                      onClick={() => {
+                        // Flip all placed notes horizontally
+                        currentPage.notes.forEach(note => {
+                          const flippedX = RENDERED_SCORESHEET_WIDTH - note.x
+                          onUpdateNote(note.id, { x: flippedX })
+                        })
+                        setShowToolsDropdown(false)
+                      }}
+                      className="flex items-center gap-2 w-full text-left px-2 py-1.3 text-sm text-gray-700 hover:bg-gray-100 rounded-sm"
+                    >
+                      <RotateCcw className="w-3 h-3" />
+                      Flip Notes
+                    </button>
+                    <button
+                      onClick={() => {
+                        // Add measure/bar line at current position
+                        const newBarLine: ArticulationElement = {
+                          id: Date.now().toString(),
+                          type: 'bar-line',
+                          name: 'Measure Line',
+                          symbol: '|',
+                          x: nextNotePosition,
+                          y: currentKeyboardLineY - 50,
+                          height: 100,
+                          isExtensible: true,
+                        }
+                        onAddArticulation?.(newBarLine)
+                        setShowToolsDropdown(false)
+                      }}
+                      className="flex items-center gap-2 w-full text-left px-2 py-1.5 text-sm text-gray-700 hover:bg-gray-100 rounded-sm"
+                    >
+                      <Music className="w-3 h-3" />
+                      Add Measure Line
+                    </button>
+                    <button
+                      onClick={() => {
+                        // Add double bar line
+                        const newDoubleBarLine: ArticulationElement = {
+                          id: Date.now().toString(),
+                          type: 'double-bar-line',
+                          name: 'Double Bar Line',
+                          symbol: '||',
+                          x: nextNotePosition,
+                          y: currentKeyboardLineY - 50,
+                          height: 100,
+                          isExtensible: true,
+                        }
+                        onAddArticulation?.(newDoubleBarLine)
+                        setShowToolsDropdown(false)
+                      }}
+                      className="flex items-center gap-2 w-full text-left px-2 py-1.5 text-sm text-gray-700 hover:bg-gray-100 rounded-sm"
+                    >
+                      <Music className="w-3 h-3" />
+                      Add Double Bar Line
                     </button>
 
                     <div className="my-2 h-px bg-gray-200" />
@@ -1110,6 +1265,7 @@ const DNRScoresheet: React.FC<DNRScoresheetProps> = ({
         {/* Status Banner */}
         {(keyboardEnabled || midiEnabled) ||
           isTextMode ||
+          isStemMode ||
           selectedArticulation ||
           (selectedNotation && !keyboardEnabled && !midiEnabled) ? (
             <div className="mb-4 bg-purple-50 border border-purple-200 rounded-lg p-3">
@@ -1118,6 +1274,7 @@ const DNRScoresheet: React.FC<DNRScoresheetProps> = ({
                   {keyboardEnabled && <Keyboard className="w-4 h-4" />}
                   {midiEnabled && <Music className="w-4 h-4" />}
                   {isTextMode && <Type className="w-4 h-4" />}
+                  {isStemMode && <span className="text-lg">🎵</span>}
                   {selectedArticulation && <span className="text-lg">♪</span>}
                   {selectedNotation && !keyboardEnabled && !midiEnabled && <Music className="w-4 h-4" />}
 
@@ -1125,6 +1282,8 @@ const DNRScoresheet: React.FC<DNRScoresheetProps> = ({
                     [DNR Mode]{" "}
                     {isTextMode
                       ? "Text Mode Active - Click anywhere to add text"
+                      : isStemMode
+                        ? "Stem Mode Active - Select and place stem images"
                       : selectedArticulation
                         ? `Articulation Mode Active - ${selectedArticulation}`
                         : selectedNotation && !keyboardEnabled && !midiEnabled
@@ -1390,7 +1549,22 @@ const DNRScoresheet: React.FC<DNRScoresheetProps> = ({
                 }}
               >
                 <div className="relative">
-                  {articulation.isExtensible ? (
+                  {articulation.type === 'stem' ? (
+                    <div 
+                      className="flex items-center justify-center"
+                      style={{ height: articulation.height || 100 }}
+                    >
+                      <img
+                        src={`/Stem/${articulation.symbol}`}
+                        alt={articulation.name}
+                        className="object-contain"
+                        style={{ 
+                          height: `${articulation.height || 100}px`,
+                          maxWidth: `${articulation.height || 100}px`
+                        }}
+                      />
+                    </div>
+                  ) : articulation.isExtensible ? (
                     <div 
                       className="flex items-center justify-center"
                       style={{ height: articulation.height || 100 }}

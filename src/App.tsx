@@ -4,6 +4,7 @@ import React, { useState, useEffect, useCallback } from "react"
 import HomePage from "./components/HomePage"
 import ProjectHeader from "./components/ProjectHeader"
 import NotePalette from "./components/NotePalette"
+
 import ScoreSheet from "./components/ScoreSheet"
 import DNRScoresheet from "./components/DNRScoresheet"
 import RightSidebar from "./components/RightSidebar"
@@ -85,18 +86,29 @@ function App() {
     return localStorage.getItem('isAuthenticated') === 'true'
   })
   const [selectedNotation, setSelectedNotation] = useState<Notation | null>(null)
-  const [selectedAccidental, setSelectedAccidental] = useState<string | null>(null)
+
   const [selectedArticulation, setSelectedArticulation] = useState<string | null>(null)
   const [isTextMode, setIsTextMode] = useState(false)
   const [isLyricsMode, setIsLyricsMode] = useState(false)
   const [isHighlighterMode, setIsHighlighterMode] = useState(false)
+
   const [selectedHighlighterColor, setSelectedHighlighterColor] = useState<'red' | 'green' | 'blue' | 'yellow'>('yellow')
   const [textElements, setTextElements] = useState<TextElement[]>([])
   const [articulationElements, setArticulationElements] = useState<ArticulationElement[]>([])
   const [lyricElements, setLyricElements] = useState<LyricElement[]>([])
   const [highlighterElements, setHighlighterElements] = useState<HighlighterElement[]>([])
 
-  const [scoreMode, setScoreMode] = useState<ScoreMode>('normal')
+  const [scoreMode, setScoreMode] = useState<ScoreMode>(() => {
+    // Initialize from localStorage or default to 'normal'
+    const savedMode = localStorage.getItem('scoreMode') as ScoreMode
+    return savedMode || 'normal'
+  })
+
+  // Save score mode to localStorage whenever it changes
+  const handleScoreModeChange = useCallback((mode: ScoreMode) => {
+    setScoreMode(mode)
+    localStorage.setItem('scoreMode', mode)
+  }, [])
   const [layoutSettings, setLayoutSettings] = useState<LayoutSettings>({
     topMargin: 0.50,
     bottomMargin: 0.50,
@@ -165,8 +177,9 @@ function App() {
         setCurrentPageIndex(0)
       }
       
-      // Set the score mode based on project type
-      setScoreMode(currentProject.projectType === 'DNR' ? 'dnr' : 'normal')
+      // Load saved score mode from localStorage or default to normal
+      const savedScoreMode = localStorage.getItem('scoreMode') as ScoreMode
+      setScoreMode(savedScoreMode || 'normal')
       // Reset undo/redo history with loaded project
       resetHistory({
         notes: currentProject.notes,
@@ -216,8 +229,10 @@ function App() {
       setCurrentProject(loadedProject)
       setCurrentProjectId(projectId)
       setCurrentPageIndex(0)
-      // Set the score mode based on project type
-      setScoreMode(projectType === 'DNR' ? 'dnr' : 'normal')
+      // Set the score mode based on project type and save to localStorage
+      const newMode = projectType === 'DNR' ? 'dnr' : 'normal'
+      setScoreMode(newMode)
+      localStorage.setItem('scoreMode', newMode)
       
       // Load saved elements from metadata
       setTextElements(metadata?.textElements || [])
@@ -558,8 +573,7 @@ function App() {
         timeSignature: currentProject.timeSignature,
         keySignature: currentProject.keySignature,
         tempo: currentProject.tempo,
-        keyboardLineSpacing: currentProject.keyboardLineSpacing,
-        projectType: currentProject.projectType
+        keyboardLineSpacing: currentProject.keyboardLineSpacing
       }
       
       // Add the new page to the pages array
@@ -954,7 +968,7 @@ function App() {
 
       return () => clearTimeout(timeoutId)
     }
-  }, [currentProject?.notes, currentProjectId, saveNotes, pages, currentPageIndex, textElements, articulationElements, lyricElements, highlighterElements, updateProject])
+  }, [currentProject?.notes, currentProjectId, saveNotes, pages, currentPageIndex, updateProject]) // Removed problematic dependencies
 
   // Show landing page first
   if (showLandingPage) {
@@ -989,7 +1003,7 @@ function App() {
         onBackToHome={handleBackToHome} 
         onLogout={handleLogout}
         scoreMode={scoreMode}
-        onScoreModeChange={setScoreMode}
+        onScoreModeChange={handleScoreModeChange}
       />
       <PageNavigation
         pages={pages}
@@ -1002,8 +1016,6 @@ function App() {
         <NotePalette
           selectedNotation={selectedNotation}
           onNotationSelect={setSelectedNotation}
-          selectedAccidental={selectedAccidental}
-          onAccidentalSelect={setSelectedAccidental}
         />
         {scoreMode === 'dnr' ? (
           <DNRScoresheet
@@ -1012,7 +1024,6 @@ function App() {
             onAddNote={handleAddNote}
             onRemoveNote={handleRemoveNote}
             onUpdateNote={handleUpdateNote}
-            onClearPage={handleClearPage}
             onUpdatePageSettings={handleUpdatePageSettings}
             textElements={textElements}
             onAddTextElement={handleAddTextElement}
@@ -1090,7 +1101,6 @@ function App() {
           isTextMode={isTextMode}
           onTextModeToggle={setIsTextMode}
           currentPage={currentProject}
-          onUpdatePageSettings={handleUpdatePageSettings}
           lyricElements={lyricElements}
           onAddLyric={handleAddLyric}
           onRemoveLyric={handleRemoveLyric}

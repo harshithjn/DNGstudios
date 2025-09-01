@@ -18,6 +18,7 @@ import { notations, getNotationByKey, type Notation } from "../data/notations"
 import html2canvas from "html2canvas"
 import jsPDF from "jspdf"
 import type { TextElement, ArticulationElement, LyricElement, HighlighterElement } from "../App"
+import type { LayoutSettings } from "./LayoutSettings"
 
 import PianoComponent from "./Piano"
 import type { ScoreMode } from "./ModeSelector"
@@ -65,6 +66,7 @@ interface ScoreSheetProps {
   isTextMode: boolean
   isLyricsMode?: boolean
   isHighlighterMode?: boolean
+  isStemMode?: boolean
   selectedHighlighterColor?: 'red' | 'green' | 'blue' | 'yellow'
   lyricElements?: LyricElement[]
   onAddLyric?: (lyric: LyricElement) => void
@@ -72,13 +74,17 @@ interface ScoreSheetProps {
   onUpdateLyric?: (id: string, updates: Partial<LyricElement>) => void
   highlighterElements?: HighlighterElement[]
   onAddHighlighter?: (highlighter: HighlighterElement) => void
-
+  onRemoveHighlighter?: (id: string) => void
+  onUpdateHighlighter?: (id: string, updates: Partial<HighlighterElement>) => void
+  layoutSettings?: LayoutSettings
+  onUpdateLayoutSettings?: (settings: Partial<LayoutSettings>) => void
 
   canUndo: boolean
   canRedo: boolean
   onUndo: () => void
   onRedo: () => void
   scoreMode: ScoreMode
+  onAddPage?: () => void
 
 }
 
@@ -234,6 +240,8 @@ const ScoreSheet: React.FC<ScoreSheetProps> = ({
   const [lyricsDialogPosition, setLyricsDialogPosition] = useState({ x: 0, y: 0 })
   const [newLyricsContent, setNewLyricsContent] = useState("")
   const [selectedNoteForLyrics, setSelectedNoteForLyrics] = useState<string | null>(null)
+  const [selectedStem, setSelectedStem] = useState<string | null>(null)
+  const [isStemMode, setIsStemMode] = useState(false)
 
   
 
@@ -627,8 +635,18 @@ const ScoreSheet: React.FC<ScoreSheetProps> = ({
       let finalX = customX ?? nextNotePosition
       let finalY = customY ?? currentKeyboardLineY
 
-      // If custom position is provided, use it directly
+      // If custom position is provided, snap to nearest keyboard line
       if (customX !== undefined && customY !== undefined) {
+        // Find the closest keyboard line Y position
+        const closestLineIndex = KEYBOARD_LINE_Y_POSITIONS.reduce((closest, current, index) => {
+          const distance = Math.abs(current - customY)
+          const closestDistance = Math.abs(KEYBOARD_LINE_Y_POSITIONS[closest] - customY)
+          return distance < closestDistance ? index : closest
+        }, 0)
+        
+        finalY = KEYBOARD_LINE_Y_POSITIONS[closestLineIndex]
+        setCurrentKeyboardLineIndex(closestLineIndex)
+        
         const newNote: PlacedNotation = {
           id: Date.now().toString(),
           notation: mappedNotation,
@@ -660,7 +678,8 @@ const ScoreSheet: React.FC<ScoreSheetProps> = ({
 
       // Ensure proper alignment to grid for better PDF export
       finalX = Math.round(finalX / 10) * 10
-      finalY = Math.round(finalY / 10) * 10
+      // Always use exact keyboard line Y position for consistent placement
+      finalY = KEYBOARD_LINE_Y_POSITIONS[currentKeyboardLineIndex]
 
       const newNote: PlacedNotation = {
         id: Date.now().toString(),
@@ -727,6 +746,14 @@ const ScoreSheet: React.FC<ScoreSheetProps> = ({
       }
 
       const key = event.key
+      
+      // Handle Escape key to clear note selection
+      if (key === "Escape") {
+        event.preventDefault()
+        setSelectedNoteId(null)
+        return
+      }
+      
       const mappedNotation = getNotationByKey(key)
       console.log('Mapped notation for key:', key, mappedNotation)
 
@@ -854,6 +881,22 @@ const ScoreSheet: React.FC<ScoreSheetProps> = ({
       return
     }
 
+    if (isStemMode && selectedStem) {
+      // In stem mode, place the selected stem image
+      const newStemElement: ArticulationElement = {
+        id: Date.now().toString(),
+        type: 'stem',
+        name: selectedStem,
+        symbol: selectedStem,
+        x: Math.max(20, Math.min(x, rect.width - 20)),
+        y: Math.max(20, Math.min(y, rect.height - 20)),
+        height: 100, // Default height for stem images
+        isExtensible: true,
+      }
+      onAddArticulation(newStemElement)
+      return
+    }
+
     if (selectedArticulation) {
       const articulations: Array<{ id: string; name: string; symbol: string; isExtensible?: boolean }> = [
         { id: "staccato", name: "Staccato", symbol: "." },
@@ -903,7 +946,7 @@ const ScoreSheet: React.FC<ScoreSheetProps> = ({
 
   // Handle mouse move to update cursor position for note placement
   const handleNotePlacementMouseMove = useCallback((event: React.MouseEvent<HTMLDivElement>) => {
-    if (!selectedNotation || isTextMode || isLyricsMode || selectedArticulation || keyboardEnabled || midiEnabled) {
+    if (!selectedNotation || isTextMode || isLyricsMode || selectedArticulation || isStemMode || keyboardEnabled || midiEnabled) {
       return
     }
 
@@ -923,7 +966,7 @@ const ScoreSheet: React.FC<ScoreSheetProps> = ({
     }, 0)
     
     setCurrentKeyboardLineIndex(closestLineIndex)
-  }, [selectedNotation, isTextMode, isLyricsMode, selectedArticulation, keyboardEnabled, midiEnabled])
+  }, [selectedNotation, isTextMode, isLyricsMode, selectedArticulation, isStemMode, keyboardEnabled, midiEnabled])
 
   const handleAddText = () => {
     if (!newTextContent.trim()) return
@@ -1019,10 +1062,11 @@ const ScoreSheet: React.FC<ScoreSheetProps> = ({
     if (isTextMode) return "text"
     if (isLyricsMode) return "text"
     if (isHighlighterMode) return "crosshair"
+    if (isStemMode) return "crosshair"
     if (selectedArticulation) return "crosshair"
     if (selectedNotation && !keyboardEnabled && !midiEnabled) return "crosshair"
     return "default"
-  }, [selectedNotation, keyboardEnabled, midiEnabled, isTextMode, isLyricsMode, isHighlighterMode, selectedArticulation, isDraggingNote, draggedTextId, draggedArticulationId, draggedLyricId])
+  }, [selectedNotation, keyboardEnabled, midiEnabled, isTextMode, isLyricsMode, isHighlighterMode, isStemMode, selectedArticulation, isDraggingNote, draggedTextId, draggedArticulationId, draggedLyricId])
 
   useEffect(() => {
     if (midiEnabled) {
@@ -1106,7 +1150,7 @@ const ScoreSheet: React.FC<ScoreSheetProps> = ({
       // setLastMidiTime({})
       setMidiInputs([])
     }
-  }, [midiEnabled, handleMidiMessage, midiInputs])
+  }, [midiEnabled, handleMidiMessage])
 
   // Event listeners setup
   useEffect(() => {
@@ -1149,7 +1193,7 @@ const ScoreSheet: React.FC<ScoreSheetProps> = ({
       setCurrentKeyboardLineIndex(0)
       lastNotePositionRef.current = { x: INITIAL_KEYBOARD_NOTE_X_POSITION, y: KEYBOARD_LINE_Y_POSITIONS[0] }
     }
-  }, [currentPage.notes.length]) // Only depend on the length to prevent infinite loops
+  }, [currentPage.notes.length]) // Only depend on notes length to prevent infinite loops
 
   useEffect(() => {
     if (keyboardEnabled) {
@@ -1163,14 +1207,22 @@ const ScoreSheet: React.FC<ScoreSheetProps> = ({
 
 
 
+  // Handle background click to clear note selection
+  const handleBackgroundClick = (e: React.MouseEvent) => {
+    // Only clear selection if clicking on the background, not on notes or other elements
+    if (e.target === e.currentTarget) {
+      setSelectedNoteId(null)
+    }
+    
+    if (keyboardEnabled) {
+      document.body.focus()
+    }
+  }
+
   return (
     <div
       className="flex-1 bg-gray-100 overflow-auto"
-      onClick={() => {
-        if (keyboardEnabled) {
-          document.body.focus()
-        }
-      }}
+      onClick={handleBackgroundClick}
       tabIndex={keyboardEnabled ? 0 : -1}
     >
       <div className="max-w-7xl mx-auto p-8">
@@ -1331,7 +1383,7 @@ const ScoreSheet: React.FC<ScoreSheetProps> = ({
                         handleClearAll()
                         setShowToolsDropdown(false)
                       }}
-                      disabled={currentPage.notes.length === 0 && drawingLines.length === 0}
+                      disabled={currentPage.notes.length === 0}
                       className="flex items-center gap-2 w-full text-left px-2 py-1.5 text-sm text-gray-700 hover:bg-gray-100 rounded-sm disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       <Trash2 className="w-3 h-3" />
@@ -1347,6 +1399,194 @@ const ScoreSheet: React.FC<ScoreSheetProps> = ({
                     >
                       <RotateCcw className="w-3 h-3" />
                       Reset Position
+                    </button>
+                    <button
+                      onClick={() => {
+                        setIsStemMode(!isStemMode)
+                        setShowToolsDropdown(false)
+                        // Reset other modes
+                        setIsTextMode(false)
+                        setIsLyricsMode(false)
+                        setIsHighlighterMode(false)
+                        setSelectedStem(null)
+                      }}
+                      className={`flex items-center gap-2 w-full text-left px-2 py-1.5 text-sm rounded-sm ${
+                        isStemMode 
+                          ? "bg-blue-100 text-blue-700 hover:bg-blue-200" 
+                          : "text-gray-700 hover:bg-gray-100"
+                      }`}
+                    >
+                      <Music className="w-3 h-3" />
+                      Stem
+                    </button>
+                    <button
+                      onClick={() => {
+                        // Flip all placed notes horizontally
+                        currentPage.notes.forEach(note => {
+                          const flippedX = RENDERED_SCORESHEET_WIDTH - note.x
+                          onUpdateNote(note.id, { x: flippedX })
+                        })
+                        setShowToolsDropdown(false)
+                      }}
+                      className="flex items-center gap-2 w-full text-left px-2 py-1.5 text-sm text-gray-700 hover:bg-gray-100 rounded-sm"
+                    >
+                      <RotateCcw className="w-3 h-3" />
+                      Flip Notes
+                    </button>
+                    <button
+                      onClick={() => {
+                        // Add measure/bar line at current position
+                        const newBarLine: ArticulationElement = {
+                          id: Date.now().toString(),
+                          type: 'bar-line',
+                          name: 'Measure Line',
+                          symbol: '|',
+                          x: nextNotePosition,
+                          y: currentKeyboardLineY - 50,
+                          height: 100,
+                          isExtensible: true,
+                        }
+                        onAddArticulation(newBarLine)
+                        setShowToolsDropdown(false)
+                      }}
+                      className="flex items-center gap-2 w-full text-left px-2 py-1.5 text-sm text-gray-700 hover:bg-gray-100 rounded-sm"
+                    >
+                      <Music className="w-3 h-3" />
+                      Add Measure Line
+                    </button>
+                    <button
+                      onClick={() => {
+                        // Add double bar line
+                        const newDoubleBarLine: ArticulationElement = {
+                          id: Date.now().toString(),
+                          type: 'double-bar-line',
+                          name: 'Double Bar Line',
+                          symbol: '||',
+                          x: nextNotePosition,
+                          y: currentKeyboardLineY - 50,
+                          height: 100,
+                          isExtensible: true,
+                        }
+                        onAddArticulation(newDoubleBarLine)
+                        setShowToolsDropdown(false)
+                      }}
+                      className="flex items-center gap-2 w-full text-left px-2 py-1.5 text-sm text-gray-700 hover:bg-gray-100 rounded-sm"
+                    >
+                      <Music className="w-3 h-3" />
+                      Add Double Bar Line
+                    </button>
+                    <button
+                      onClick={() => {
+                        // Add tempo marking
+                        const newTempoMark: ArticulationElement = {
+                          id: Date.now().toString(),
+                          type: 'tempo',
+                          name: 'Tempo Mark',
+                          symbol: '♩=120',
+                          x: nextNotePosition,
+                          y: currentKeyboardLineY - 80,
+                          height: 60,
+                          isExtensible: false,
+                        }
+                        onAddArticulation(newTempoMark)
+                        setShowToolsDropdown(false)
+                      }}
+                      className="flex items-center gap-2 w-full text-left px-2 py-1.5 text-sm text-gray-700 hover:bg-gray-100 rounded-sm"
+                    >
+                      <Music className="w-3 h-3" />
+                      Add Tempo Mark
+                    </button>
+                    <button
+                      onClick={() => {
+                        // Add dynamic marking (forte)
+                        const newDynamic: ArticulationElement = {
+                          id: Date.now().toString(),
+                          type: 'dynamic',
+                          name: 'Forte',
+                          symbol: 'f',
+                          x: nextNotePosition,
+                          y: currentKeyboardLineY - 40,
+                          height: 60,
+                          isExtensible: false,
+                        }
+                        onAddArticulation(newDynamic)
+                        setShowToolsDropdown(false)
+                      }}
+                      className="flex items-center gap-2 w-full text-left px-2 py-1.5 text-sm text-gray-700 hover:bg-gray-100 rounded-sm"
+                    >
+                      <Music className="w-3 h-3" />
+                      Add Dynamic (f)
+                    </button>
+                    <button
+                      onClick={() => {
+                        // Add repeat sign
+                        const newRepeatSign: ArticulationElement = {
+                          id: Date.now().toString(),
+                          type: 'repeat',
+                          name: 'Repeat Sign',
+                          symbol: '𝄆',
+                          x: nextNotePosition,
+                          y: currentKeyboardLineY - 60,
+                          height: 80,
+                          isExtensible: false,
+                        }
+                        onAddArticulation(newRepeatSign)
+                        setShowToolsDropdown(false)
+                      }}
+                      className="flex items-center gap-2 w-full text-left px-2 py-1.5 text-sm text-gray-700 hover:bg-gray-100 rounded-sm"
+                    >
+                      <Music className="w-3 h-3" />
+                      Add Repeat Sign
+                    </button>
+                    <button
+                      onClick={() => {
+                        // Group selected notes with beam
+                        if (selectedNoteId) {
+                          // Find the selected note and group it with nearby notes
+                          const selectedNote = currentPage.notes.find(n => n.id === selectedNoteId)
+                          if (selectedNote) {
+                            // Add a beam element
+                            const newBeam: ArticulationElement = {
+                              id: Date.now().toString(),
+                              type: 'beam',
+                              name: 'Beam',
+                              symbol: '━',
+                              x: selectedNote.x,
+                              y: selectedNote.y - 30,
+                              height: 20,
+                              isExtensible: true,
+                            }
+                            onAddArticulation(newBeam)
+                          }
+                        }
+                        setShowToolsDropdown(false)
+                      }}
+                      className="flex items-center gap-2 w-full text-left px-2 py-1.5 text-sm text-gray-700 hover:bg-gray-100 rounded-sm"
+                    >
+                      <Music className="w-3 h-3" />
+                      Group Notes (Beam)
+                    </button>
+                    <button
+                      onClick={() => {
+                        // Auto-adjust note spacing for better visual appearance
+                        const sortedNotes = [...currentPage.notes].sort((a, b) => a.x - b.x)
+                        let currentX = INITIAL_KEYBOARD_NOTE_X_POSITION
+                        
+                        sortedNotes.forEach((note, index) => {
+                          const newX = currentX
+                          currentX += NOTATION_KEYBOARD_X_INCREMENT
+                          
+                          if (Math.abs(note.x - newX) > 5) {
+                            onUpdateNote(note.id, { x: newX })
+                          }
+                        })
+                        
+                        setShowToolsDropdown(false)
+                      }}
+                      className="flex items-center gap-2 w-full text-left px-2 py-1.5 text-sm text-gray-700 hover:bg-gray-100 rounded-sm"
+                    >
+                      <Music className="w-3 h-3" />
+                      Auto-Adjust Spacing
                     </button>
 
 
@@ -1417,6 +1657,7 @@ const ScoreSheet: React.FC<ScoreSheetProps> = ({
           isTextMode ||
           isLyricsMode ||
           isHighlighterMode ||
+          isStemMode ||
           selectedArticulation ||
           (selectedNotation && !keyboardEnabled && !midiEnabled) ? (
             <div className="mb-4 bg-blue-50 border border-blue-200 rounded-lg p-3">
@@ -1427,6 +1668,7 @@ const ScoreSheet: React.FC<ScoreSheetProps> = ({
                   {isTextMode && <Type className="w-4 h-4" />}
                   {isLyricsMode && <Music className="w-4 h-4" />}
                   {isHighlighterMode && <span className="text-lg">🎨</span>}
+                  {isStemMode && <span className="text-lg">🎵</span>}
                   {selectedArticulation && <span className="text-lg">♪</span>}
                   {selectedNotation && !keyboardEnabled && !midiEnabled && <Music className="w-4 h-4" />}
 
@@ -1438,6 +1680,8 @@ const ScoreSheet: React.FC<ScoreSheetProps> = ({
                         ? "Lyrics Mode Active - Click anywhere to add lyrics"
                         : isHighlighterMode
                           ? "Highlighter Mode Active - Click and drag to highlight areas"
+                          : isStemMode
+                            ? "Stem Mode Active - Select and place stem images"
                           : selectedArticulation
                             ? `Articulation Mode Active - ${selectedArticulation}`
                             : selectedNotation && !keyboardEnabled && !midiEnabled
@@ -1582,7 +1826,7 @@ const ScoreSheet: React.FC<ScoreSheetProps> = ({
                 onMouseDown={(e) => {
                   e.stopPropagation()
                   // Only start drag if not in note placement mode
-                  if (!selectedNotation || isTextMode || isLyricsMode || selectedArticulation || keyboardEnabled || midiEnabled) {
+                  if (!selectedNotation || isTextMode || isLyricsMode || selectedArticulation || isStemMode || keyboardEnabled || midiEnabled) {
                     handleNoteMouseDown(e, placedNote.id)
                   }
                 }}
@@ -1596,7 +1840,7 @@ const ScoreSheet: React.FC<ScoreSheetProps> = ({
                     return
                   }
                   // Delete note on click if in note placement mode
-                  if (selectedNotation && !isTextMode && !isLyricsMode && !selectedArticulation && !keyboardEnabled && !midiEnabled) {
+                  if (selectedNotation && !isTextMode && !isLyricsMode && !selectedArticulation && !isStemMode && !keyboardEnabled && !midiEnabled) {
                     onRemoveNote(placedNote.id)
                   }
                 }}
@@ -1740,7 +1984,22 @@ const ScoreSheet: React.FC<ScoreSheetProps> = ({
                 }}
               >
                 <div className="relative">
-                  {articulation.isExtensible ? (
+                  {articulation.type === 'stem' ? (
+                    <div 
+                      className="flex items-center justify-center"
+                      style={{ height: articulation.height || 100 }}
+                    >
+                      <img
+                        src={`/Stem/${articulation.symbol}`}
+                        alt={articulation.name}
+                        className="object-contain"
+                        style={{ 
+                          height: `${articulation.height || 100}px`,
+                          maxWidth: `${articulation.height || 100}px`
+                        }}
+                      />
+                    </div>
+                  ) : articulation.isExtensible ? (
                     <div 
                       className="flex items-center justify-center"
                       style={{ height: articulation.height || 100 }}
@@ -1787,7 +2046,7 @@ const ScoreSheet: React.FC<ScoreSheetProps> = ({
 
 
             {/* Next note position indicator */}
-            {(keyboardEnabled || midiEnabled) && !isTextMode && !isLyricsMode && !selectedArticulation && (
+            {(keyboardEnabled || midiEnabled) && !isTextMode && !isLyricsMode && !selectedArticulation && !isStemMode && (
               <div
                 className="absolute w-px h-6 bg-blue-400 opacity-100 animate-pulse z-20 translate-y-1/2"
                 style={{
@@ -1798,7 +2057,7 @@ const ScoreSheet: React.FC<ScoreSheetProps> = ({
             )}
 
             {/* Mouse cursor indicator for note placement */}
-            {selectedNotation && !isTextMode && !selectedArticulation && !keyboardEnabled && !midiEnabled && (
+            {selectedNotation && !isTextMode && !selectedArticulation && !isStemMode && !keyboardEnabled && !midiEnabled && (
               <div
                 className="absolute w-8 h-8 bg-blue-500 bg-opacity-30 border-2 border-blue-500 rounded-full z-20 pointer-events-none"
                 style={{
