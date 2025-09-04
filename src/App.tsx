@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useState, useEffect, useCallback } from "react"
+import React, { useState, useEffect, useCallback, useRef } from "react"
 import HomePage from "./components/HomePage"
 import ProjectHeader from "./components/ProjectHeader"
 import NotePalette from "./components/NotePalette"
@@ -13,8 +13,7 @@ import LandingPage from "./components/LandingPage"
 import FeaturesPage from "./components/FeaturesPage"
 import PageNavigation from "./components/PageNavigation"
 import LayoutSettings from "./components/LayoutSettings"
-import { useSupabase, type ScorePage, type PlacedNotation } from "./hooks/useSupabase"
-import { testSupabaseConnection } from "./lib/test-connection"
+import { useLocalStorage, type ScorePage, type PlacedNotation } from "./hooks/useLocalStorage"
 import type { Notation } from "./data/notations"
 import { useUndoRedo } from "./hooks/useUndoRedo"
 import { type ScoreMode } from "./components/ModeSelector"
@@ -60,6 +59,13 @@ export interface HighlighterElement {
   opacity: number
 }
 
+export interface DefaultBarLine {
+  id: string
+  x: number
+  y: number
+  height: number
+}
+
 
 
 function App() {
@@ -97,6 +103,14 @@ function App() {
   const [articulationElements, setArticulationElements] = useState<ArticulationElement[]>([])
   const [lyricElements, setLyricElements] = useState<LyricElement[]>([])
   const [highlighterElements, setHighlighterElements] = useState<HighlighterElement[]>([])
+  
+  // Ref to track current articulations for reliable access
+  const articulationElementsRef = useRef<ArticulationElement[]>([])
+  
+  // Update ref whenever articulation elements change
+  useEffect(() => {
+    articulationElementsRef.current = articulationElements
+  }, [articulationElements])
 
   const [scoreMode, setScoreMode] = useState<ScoreMode>(() => {
     // Initialize from localStorage or default to 'normal'
@@ -134,7 +148,7 @@ function App() {
     hideMutedTracks: false,
   })
 
-  const { loadScorePage, saveNotes, addNote, removeNote, updateProject, saveProjectMetadata, loadProjectMetadata } = useSupabase()
+  const { loadScorePage, loadProjectPages, saveProjectPages, saveNotes, addNote, removeNote, updateProject, saveProjectMetadata, loadProjectMetadata } = useLocalStorage()
 
   // Initialize unified undo/redo system
   const {
@@ -153,10 +167,6 @@ function App() {
     timestamp: Date.now()
   })
 
-  // Test Supabase connection on app startup
-  useEffect(() => {
-    testSupabaseConnection()
-  }, [])
 
   // Load saved project on app startup if authenticated
   useEffect(() => {
@@ -218,17 +228,17 @@ function App() {
   }, [])
 
   const handleOpenProject = useCallback(async (projectId: string, projectType: "DNG" | "DNR") => {
-    const loadedProject = await loadScorePage(projectId)
-    if (loadedProject) {
+    const loadedPages = await loadProjectPages(projectId)
+    if (loadedPages && loadedPages.length > 0) {
       // Load project metadata
       const metadata = await loadProjectMetadata(projectId)
       
-      // Initialize with a single page if no pages exist
-      const initialPages = [loadedProject]
-      setPages(initialPages)
-      setCurrentProject(loadedProject)
+      // Use all loaded pages
+      setPages(loadedPages)
+      setCurrentProject(loadedPages[0]) // Set first page as current
       setCurrentProjectId(projectId)
       setCurrentPageIndex(0)
+      
       // Set the score mode based on project type and save to localStorage
       const newMode = projectType === 'DNR' ? 'dnr' : 'normal'
       setScoreMode(newMode)
@@ -242,17 +252,18 @@ function App() {
       
       // Reset undo/redo history with loaded project
       resetHistory({
-        notes: loadedProject.notes,
+        notes: loadedPages[0].notes,
         textElements: metadata?.textElements || [],
         articulationElements: metadata?.articulationElements || [],
         timestamp: Date.now()
       })
+      
       // Persist to localStorage
       localStorage.setItem('currentProjectId', projectId)
-      localStorage.setItem('currentProject', JSON.stringify(loadedProject))
-      localStorage.setItem('projectPages', JSON.stringify(initialPages))
+      localStorage.setItem('currentProject', JSON.stringify(loadedPages[0]))
+      localStorage.setItem('projectPages', JSON.stringify(loadedPages))
     }
-  }, [loadScorePage, loadProjectMetadata, resetHistory])
+  }, [loadProjectPages, loadProjectMetadata, resetHistory])
 
   const handleBackToHome = async () => {
     if (currentProject && currentProjectId) {
@@ -306,12 +317,15 @@ function App() {
             )
           )
           
+          // Use ref to get the most current articulation elements
+          const currentArticulations = articulationElementsRef.current
+          
           // Push to unified history with the new notes AND preserve articulation elements
-          console.log('Pushing to history with', newNotes.length, 'notes and', articulationElements.length, 'articulations')
+          console.log('Pushing to history with', newNotes.length, 'notes and', currentArticulations.length, 'articulations')
           pushHistoryState({
             notes: newNotes,
             textElements: textElements,
-            articulationElements: articulationElements,
+            articulationElements: currentArticulations,
             timestamp: Date.now()
           })
           
@@ -336,10 +350,13 @@ function App() {
             )
           )
           
+          // Use ref to get the most current articulation elements
+          const currentArticulations = articulationElementsRef.current
+          
           pushHistoryState({
             notes: newNotes,
             textElements: textElements,
-            articulationElements: articulationElements,
+            articulationElements: currentArticulations,
             timestamp: Date.now()
           })
         }
@@ -366,7 +383,7 @@ function App() {
         pushHistoryState({
           notes: newNotes,
           textElements: textElements,
-          articulationElements: articulationElements,
+          articulationElements: articulationElementsRef.current,
             
           timestamp: Date.now()
         })
@@ -408,7 +425,7 @@ function App() {
           pushHistoryState({
             notes: newNotes,
             textElements: textElements,
-            articulationElements: articulationElements,
+            articulationElements: articulationElementsRef.current,
             
             timestamp: Date.now()
           })
@@ -435,7 +452,7 @@ function App() {
           pushHistoryState({
             notes: newNotes,
             textElements: textElements,
-            articulationElements: articulationElements,
+            articulationElements: articulationElementsRef.current,
             
             timestamp: Date.now()
           })
@@ -462,7 +479,7 @@ function App() {
         pushHistoryState({
           notes: newNotes,
           textElements: textElements,
-          articulationElements: articulationElements,
+          articulationElements: articulationElementsRef.current,
             
           timestamp: Date.now()
         })
@@ -495,7 +512,7 @@ function App() {
       pushHistoryState({
         notes: newNotes,
         textElements: textElements,
-        articulationElements: articulationElements,
+                    articulationElements: articulationElementsRef.current,
             
         timestamp: Date.now()
       })
@@ -524,7 +541,7 @@ function App() {
         pushHistoryState({
           notes: [],
           textElements: textElements,
-          articulationElements: articulationElements,
+          articulationElements: articulationElementsRef.current,
             
           timestamp: Date.now()
         })
@@ -549,18 +566,25 @@ function App() {
   }
 
   const handleAddPage = async () => {
-    if (currentProject && currentProjectId) {
+    console.log('handleAddPage called!')
+    try {
+      if (!currentProject || !currentProjectId) {
+        console.error('Cannot add page: No current project or project ID')
+        return
+      }
+
+      console.log('Adding new page, current pages count:', pages.length)
+      
       // First, save the current page's data to the pages array
       const updatedPages = pages.map((page, index) => 
         index === currentPageIndex 
           ? { 
               ...page, 
-              notes: currentProject.notes,
-              textElements: textElements,
-              articulationElements: articulationElements,
-            
-              lyricElements: lyricElements,
-              highlighterElements: highlighterElements
+              notes: currentProject.notes || [],
+              textElements: textElements || [],
+              articulationElements: articulationElements || [],
+              lyricElements: lyricElements || [],
+              highlighterElements: highlighterElements || []
             }
           : page
       )
@@ -570,10 +594,15 @@ function App() {
         id: Date.now().toString(),
         title: `Page ${pages.length + 1}`,
         notes: [],
-        timeSignature: currentProject.timeSignature,
-        keySignature: currentProject.keySignature,
-        tempo: currentProject.tempo,
-        keyboardLineSpacing: currentProject.keyboardLineSpacing
+        timeSignature: currentProject.timeSignature || { numerator: 4, denominator: 4 },
+        keySignature: currentProject.keySignature || 'C',
+        tempo: currentProject.tempo || 120,
+        keyboardLineSpacing: currentProject.keyboardLineSpacing || 108,
+        textElements: [],
+        articulationElements: [],
+        lyricElements: [],
+        highlighterElements: [],
+        defaultBarLines: []
       }
       
       // Add the new page to the pages array
@@ -587,7 +616,8 @@ function App() {
         notes: [],
         textElements: [],
         articulationElements: [],
-        
+        lyricElements: [],
+        highlighterElements: [],
         timestamp: Date.now()
       })
       
@@ -597,33 +627,57 @@ function App() {
       setLyricElements([])
       setHighlighterElements([])
       
-      // Persist to localStorage
+      // Save all pages to localStorage using the new function
+      await saveProjectPages(currentProjectId, newPages)
+      
+      // Also update local localStorage for immediate access
       localStorage.setItem('projectPages', JSON.stringify(newPages))
       localStorage.setItem('currentProject', JSON.stringify(newPage))
+      
+      console.log('Successfully added new page. Total pages:', newPages.length)
+    } catch (error) {
+      console.error('Error adding new page:', error)
     }
   }
 
-  const handlePageChange = (pageIndex: number) => {
-    if (pageIndex >= 0 && pageIndex < pages.length) {
+  const handlePageChange = async (pageIndex: number) => {
+    if (pageIndex >= 0 && pageIndex < pages.length && pageIndex !== currentPageIndex) {
+      console.log(`Switching from page ${currentPageIndex} to page ${pageIndex}`)
+      
       // First, save the current page's data before switching
-      const updatedPages = pages.map((page, index) => 
-        index === currentPageIndex 
-                        ? { 
-                  ...page, 
-                  notes: currentProject?.notes || [],
-                  textElements: textElements,
-                  articulationElements: articulationElements,
-
-                  lyricElements: lyricElements,
-                  highlighterElements: highlighterElements
-                }
-          : page
-      )
+      const updatedPages = pages.map((page, index) => {
+        if (index === currentPageIndex) {
+          console.log(`Saving current page ${index} data:`, {
+            notes: currentProject?.notes?.length || 0,
+            textElements: textElements.length,
+            articulationElements: articulationElements.length,
+            lyricElements: lyricElements.length,
+            highlighterElements: highlighterElements.length
+          })
+          return { 
+            ...page, 
+            notes: currentProject?.notes || [],
+            textElements: textElements,
+            articulationElements: articulationElementsRef.current,
+            lyricElements: lyricElements,
+            highlighterElements: highlighterElements
+          }
+        }
+        return page
+      })
       
       // Update pages with current page's saved data
       setPages(updatedPages)
       
       const selectedPage = updatedPages[pageIndex]
+      console.log(`Loading page ${pageIndex} data:`, {
+        notes: selectedPage.notes?.length || 0,
+        textElements: selectedPage.textElements?.length || 0,
+        articulationElements: selectedPage.articulationElements?.length || 0,
+        lyricElements: selectedPage.lyricElements?.length || 0,
+        highlighterElements: selectedPage.highlighterElements?.length || 0
+      })
+      
       setCurrentPageIndex(pageIndex)
       setCurrentProject(selectedPage)
       
@@ -638,17 +692,21 @@ function App() {
         notes: selectedPage.notes,
         textElements: selectedPage.textElements || [],
         articulationElements: selectedPage.articulationElements || [],
-
         timestamp: Date.now()
       })
       
-      // Persist to localStorage
+      // Save all pages to localStorage using the new function
+      if (currentProjectId) {
+        await saveProjectPages(currentProjectId, updatedPages)
+      }
+      
+      // Also update local localStorage for immediate access
       localStorage.setItem('projectPages', JSON.stringify(updatedPages))
       localStorage.setItem('currentProject', JSON.stringify(selectedPage))
     }
   }
 
-  const handleRemovePage = (pageIndex: number) => {
+  const handleRemovePage = async (pageIndex: number) => {
     if (pages.length > 1 && pageIndex >= 0 && pageIndex < pages.length) {
       const newPages = pages.filter((_, index) => index !== pageIndex)
       setPages(newPages)
@@ -664,6 +722,11 @@ function App() {
         setCurrentPageIndex(currentPageIndex - 1)
       }
       
+      // Save all pages to localStorage using the new function
+      if (currentProjectId) {
+        await saveProjectPages(currentProjectId, newPages)
+      }
+      
       localStorage.setItem('projectPages', JSON.stringify(newPages))
     }
   }
@@ -676,7 +739,7 @@ function App() {
     pushHistoryState({
       notes: currentProject?.notes || [],
       textElements: newTextElements,
-      articulationElements: articulationElements,
+                  articulationElements: articulationElementsRef.current,
       
       timestamp: Date.now()
     })
@@ -700,7 +763,7 @@ function App() {
     pushHistoryState({
       notes: currentProject?.notes || [],
       textElements: newTextElements,
-      articulationElements: articulationElements,
+                  articulationElements: articulationElementsRef.current,
             
       timestamp: Date.now()
     })
@@ -714,7 +777,7 @@ function App() {
     pushHistoryState({
       notes: currentProject?.notes || [],
       textElements: newTextElements,
-      articulationElements: articulationElements,
+                  articulationElements: articulationElementsRef.current,
             
       timestamp: Date.now()
     })
@@ -724,13 +787,25 @@ function App() {
     const newArticulationElements = [...articulationElements, articulation]
     setArticulationElements(newArticulationElements)
     
-    // Push to unified history
+    // Push to unified history - ensure we have the most current notes
+    const currentNotes = currentProject?.notes || []
+    console.log('Adding articulation, preserving', currentNotes.length, 'notes')
     pushHistoryState({
-      notes: currentProject?.notes || [],
+      notes: currentNotes,
       textElements: textElements,
       articulationElements: newArticulationElements,
       timestamp: Date.now()
     })
+    
+    // Save to database immediately
+    if (currentProjectId) {
+      saveProjectMetadata(currentProjectId, {
+        textElements: textElements,
+        articulationElements: newArticulationElements,
+        lyricElements: lyricElements,
+        highlighterElements: highlighterElements
+      })
+    }
   }
 
   const handleRemoveArticulation = (id: string) => {
@@ -744,6 +819,16 @@ function App() {
       articulationElements: newArticulationElements,
       timestamp: Date.now()
     })
+    
+    // Save to database immediately
+    if (currentProjectId) {
+      saveProjectMetadata(currentProjectId, {
+        textElements: textElements,
+        articulationElements: newArticulationElements,
+        lyricElements: lyricElements,
+        highlighterElements: highlighterElements
+      })
+    }
   }
 
   const handleUpdateArticulation = (id: string, updates: Partial<ArticulationElement>) => {
@@ -757,6 +842,16 @@ function App() {
       articulationElements: newArticulationElements,
       timestamp: Date.now()
     })
+    
+    // Save to database immediately
+    if (currentProjectId) {
+      saveProjectMetadata(currentProjectId, {
+        textElements: textElements,
+        articulationElements: newArticulationElements,
+        lyricElements: lyricElements,
+        highlighterElements: highlighterElements
+      })
+    }
   }
 
 
@@ -773,7 +868,7 @@ function App() {
     pushHistoryState({
       notes: currentProject?.notes || [],
       textElements: textElements,
-      articulationElements: articulationElements,
+                  articulationElements: articulationElementsRef.current,
             
       timestamp: Date.now()
     })
@@ -787,7 +882,7 @@ function App() {
     pushHistoryState({
       notes: currentProject?.notes || [],
       textElements: textElements,
-      articulationElements: articulationElements,
+                  articulationElements: articulationElementsRef.current,
             
       timestamp: Date.now()
     })
@@ -801,7 +896,7 @@ function App() {
     pushHistoryState({
       notes: currentProject?.notes || [],
       textElements: textElements,
-      articulationElements: articulationElements,
+                  articulationElements: articulationElementsRef.current,
             
       timestamp: Date.now()
     })
@@ -815,7 +910,7 @@ function App() {
     pushHistoryState({
       notes: currentProject?.notes || [],
       textElements: textElements,
-      articulationElements: articulationElements,
+                  articulationElements: articulationElementsRef.current,
             
       timestamp: Date.now()
     })
@@ -829,7 +924,7 @@ function App() {
     pushHistoryState({
       notes: currentProject?.notes || [],
       textElements: textElements,
-      articulationElements: articulationElements,
+                  articulationElements: articulationElementsRef.current,
             
       timestamp: Date.now()
     })
@@ -843,7 +938,7 @@ function App() {
     pushHistoryState({
       notes: currentProject?.notes || [],
       textElements: textElements,
-      articulationElements: articulationElements,
+                  articulationElements: articulationElementsRef.current,
             
       timestamp: Date.now()
     })
@@ -898,19 +993,27 @@ function App() {
       
       if (historyNotesJson !== currentNotesJson) {
         console.log('Updating current project notes from history:', historyState.notes.length, 'vs current:', currentProject.notes.length)
-        setCurrentProject(prev => prev ? {
-          ...prev,
-          notes: historyState.notes
-        } : null)
+        console.log('History notes:', historyState.notes)
+        console.log('Current notes:', currentProject.notes)
         
-        // Also update the page in the pages array
-        setPages(prevPages => 
-          prevPages.map((page, index) => 
-            index === currentPageIndex 
-              ? { ...page, notes: historyState.notes }
-              : page
+        // Only update if the history has more notes or if it's a legitimate change
+        if (historyState.notes.length > 0 || currentProject.notes.length === 0) {
+          setCurrentProject(prev => prev ? {
+            ...prev,
+            notes: historyState.notes
+          } : null)
+          
+          // Also update the page in the pages array
+          setPages(prevPages => 
+            prevPages.map((page, index) => 
+              index === currentPageIndex 
+                ? { ...page, notes: historyState.notes }
+                : page
+            )
           )
-        )
+        } else {
+          console.log('Skipping note update to prevent clearing notes')
+        }
       }
       
       // Compare text elements by JSON string
@@ -926,7 +1029,14 @@ function App() {
       const historyArticulationElementsJson = JSON.stringify(historyState.articulationElements)
       if (historyArticulationElementsJson !== currentArticulationElementsJson) {
         console.log('Updating articulation elements from history')
-        setArticulationElements(historyState.articulationElements)
+        console.log('Current articulations:', articulationElements.length, 'History articulations:', historyState.articulationElements.length)
+        
+        // Only update if the history has more articulations or if it's a legitimate change
+        if (historyState.articulationElements.length > 0 || articulationElements.length === 0) {
+          setArticulationElements(historyState.articulationElements)
+        } else {
+          console.log('Skipping articulation update to prevent clearing articulations')
+        }
       }
     }
   }, [historyState, currentPageIndex])
@@ -934,8 +1044,8 @@ function App() {
   // Auto-save notes when they change
   useEffect(() => {
     if (currentProject && currentProjectId) {
-      const timeoutId = setTimeout(() => {
-        console.log('Auto-saving notes:', currentProject.notes.length)
+      const timeoutId = setTimeout(async () => {
+        console.log('Auto-saving notes:', currentProject.notes.length, 'articulations:', articulationElementsRef.current.length)
         saveNotes(currentProjectId, currentProject.notes)
         
         // Update the current page in the pages array with all current data
@@ -945,7 +1055,7 @@ function App() {
                 ...page, 
                 notes: currentProject.notes,
                 textElements: textElements,
-                articulationElements: articulationElements,
+                articulationElements: articulationElementsRef.current,
             
                 lyricElements: lyricElements,
                 highlighterElements: highlighterElements
@@ -953,7 +1063,12 @@ function App() {
             : page
         )
         
-        // Save the updated pages to localStorage
+        console.log('Auto-saving pages with articulations:', updatedPages[currentPageIndex]?.articulationElements?.length || 0)
+        
+        // Save the updated pages to localStorage using the new function
+        await saveProjectPages(currentProjectId, updatedPages)
+        
+        // Also update local localStorage for immediate access
         localStorage.setItem('projectPages', JSON.stringify(updatedPages))
         setPages(updatedPages)
         
@@ -968,7 +1083,7 @@ function App() {
 
       return () => clearTimeout(timeoutId)
     }
-  }, [currentProject?.notes, currentProjectId, saveNotes, pages, currentPageIndex, updateProject]) // Removed problematic dependencies
+  }, [currentProject?.notes, currentProjectId, saveNotes, saveProjectPages, pages, currentPageIndex, updateProject]) // Removed problematic dependencies
 
   // Show landing page first
   if (showLandingPage) {
@@ -996,7 +1111,7 @@ function App() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-100 flex flex-col">
+    <div className="min-h-screen bg-white flex flex-col">
       <ProjectHeader 
         project={currentProject} 
         onTitleChange={(title) => handleUpdatePageSettings({ title })} 
@@ -1011,6 +1126,7 @@ function App() {
         onPageChange={handlePageChange}
         onAddPage={handleAddPage}
         onRemovePage={handleRemovePage}
+        scoreMode={scoreMode}
       />
       <div className="flex flex-1">
         <NotePalette

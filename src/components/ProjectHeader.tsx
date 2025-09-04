@@ -34,13 +34,13 @@ const ProjectHeader: React.FC<ProjectHeaderProps> = ({
   };
 
   return (
-    <div className="bg-gradient-to-r from-gray-900 to-gray-800 border-b border-gray-700 shadow-2xl">
-      <div className="max-w-7xl mx-auto px-6 py-6">
+    <div className="bg-slate-900 border-b border-slate-700 shadow-lg">
+      <div className="max-w-7xl mx-auto px-6 py-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-6">
             <button
               onClick={onBackToHome}
-              className="flex items-center gap-2 px-4 py-2 text-gray-300 hover:text-white hover:bg-gray-700 rounded-xl transition-all duration-300"
+              className="flex items-center gap-2 px-4 py-2 text-slate-300 hover:text-white hover:bg-slate-800 rounded-lg transition-all duration-200"
             >
               <ArrowLeft className="w-4 h-4" />
               <span className="text-sm font-medium">Back to Studio</span>
@@ -48,17 +48,16 @@ const ProjectHeader: React.FC<ProjectHeaderProps> = ({
             
             <div className="flex items-center gap-4">
               <div className="relative">
-                <Music2 className="w-10 h-10 text-purple-400" />
-                
+                <Music2 className="w-8 h-8 text-blue-400" />
               </div>
               <div className="flex items-center gap-3">
                 {isEditingTitle ? (
-                  <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-2">
                     <input
                       type="text"
                       value={tempTitle}
                       onChange={(e) => setTempTitle(e.target.value)}
-                      className="text-2xl font-bold text-white bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                      className="text-xl font-semibold text-white bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                       onKeyDown={(e) => {
                         if (e.key === 'Enter') handleTitleSubmit();
                         if (e.key === 'Escape') handleTitleCancel();
@@ -67,23 +66,23 @@ const ProjectHeader: React.FC<ProjectHeaderProps> = ({
                     />
                     <button
                       onClick={handleTitleSubmit}
-                      className="p-2 text-green-400 hover:bg-green-500/20 rounded-lg transition-all duration-300"
+                      className="p-2 text-green-400 hover:bg-green-500/20 rounded-lg transition-all duration-200"
                     >
                       <Check className="w-4 h-4" />
                     </button>
                     <button
                       onClick={handleTitleCancel}
-                      className="p-2 text-red-400 hover:bg-red-500/20 rounded-lg transition-all duration-300"
+                      className="p-2 text-red-400 hover:bg-red-500/20 rounded-lg transition-all duration-200"
                     >
                       <X className="w-4 h-4" />
                     </button>
                   </div>
                 ) : (
-                  <div className="flex items-center gap-3">
-                    <h1 className="text-2xl font-bold text-white">{project.title}</h1>
+                  <div className="flex items-center gap-2">
+                    <h1 className="text-xl font-semibold text-white">{project.title}</h1>
                     <button
                       onClick={() => setIsEditingTitle(true)}
-                      className="p-2 text-gray-400 hover:text-white hover:bg-gray-700 rounded-lg transition-all duration-300"
+                      className="p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition-all duration-200"
                     >
                       <Edit3 className="w-4 h-4" />
                     </button>
@@ -92,14 +91,14 @@ const ProjectHeader: React.FC<ProjectHeaderProps> = ({
               </div>
             </div>
             
-            <div className="flex items-center gap-6 text-sm text-gray-300">
+            <div className="flex items-center gap-4 text-sm text-slate-300">
               <div className="flex items-center gap-2">
                 <User className="w-4 h-4" />
                 <span>{project.composer || 'Unknown Composer'}</span>
               </div>
-              <span>•</span>
-              <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                project.projectType === 'DNR' ? 'bg-blue-600 text-white' : 'bg-purple-600 text-white'
+              <span className="text-slate-500">•</span>
+              <span className={`px-3 py-1 rounded-full text-xs font-medium ${
+                project.projectType === 'DNR' ? 'bg-blue-600 text-white' : 'bg-blue-600 text-white'
               }`}>
                 {project.projectType || 'DNG'}
               </span>
@@ -113,7 +112,7 @@ const ProjectHeader: React.FC<ProjectHeaderProps> = ({
             />
             <button
               onClick={onLogout}
-              className="flex items-center gap-2 px-3 py-2 text-gray-300 hover:text-white hover:bg-gray-700 rounded-lg transition-all duration-300"
+              className="flex items-center gap-2 px-3 py-2 text-slate-300 hover:text-white hover:bg-slate-800 rounded-lg transition-all duration-200"
             >
               <LogOut className="w-4 h-4" />
               <span className="text-sm font-medium">Logout</span>

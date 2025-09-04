@@ -2,7 +2,8 @@
 
 import React from "react"
 import { Plus, X } from "lucide-react"
-import type { ScorePage } from "../hooks/useSupabase"
+import type { ScorePage } from "../hooks/useLocalStorage"
+import type { ScoreMode } from "./ModeSelector"
 
 interface PageNavigationProps {
   pages: ScorePage[]
@@ -10,6 +11,7 @@ interface PageNavigationProps {
   onPageChange: (pageIndex: number) => void
   onAddPage: () => void
   onRemovePage: (pageIndex: number) => void
+  scoreMode: ScoreMode
 }
 
 const PageNavigation: React.FC<PageNavigationProps> = ({
@@ -18,19 +20,20 @@ const PageNavigation: React.FC<PageNavigationProps> = ({
   onPageChange,
   onAddPage,
   onRemovePage,
+  scoreMode,
 }) => {
   return (
-    <div className="bg-white border-b border-gray-200 shadow-sm">
-      <div className="flex items-center justify-between px-4 py-2">
+    <div className="bg-slate-800 border-b border-slate-700 shadow-sm">
+      <div className="flex items-center justify-between px-6 py-3">
         {/* Page Tabs */}
-        <div className="flex items-center space-x-1 overflow-x-auto flex-1">
+        <div className="flex items-center space-x-2 overflow-x-auto flex-1">
           {pages.map((page, index) => (
             <div
               key={page.id}
-              className={`group flex items-center min-w-0 rounded-t-lg border-b-2 transition-all duration-200 cursor-pointer ${
+              className={`group flex items-center min-w-0 rounded-lg transition-all duration-200 cursor-pointer ${
                 index === currentPageIndex
-                  ? "border-blue-500 bg-blue-50 text-blue-700"
-                  : "border-transparent hover:border-gray-300 hover:bg-gray-50 text-gray-600"
+                  ? "bg-white text-slate-900 shadow-md"
+                  : "bg-slate-700 hover:bg-slate-600 text-slate-300 hover:text-white border border-slate-600"
               }`}
             >
               <button
@@ -50,10 +53,10 @@ const PageNavigation: React.FC<PageNavigationProps> = ({
                     e.stopPropagation()
                     onRemovePage(index)
                   }}
-                  className={`p-1 rounded-full transition-all duration-200 ${
+                  className={`p-1.5 rounded-full transition-all duration-200 ${
                     index === currentPageIndex
-                      ? "text-blue-600 hover:bg-blue-100"
-                      : "text-gray-400 hover:bg-gray-200 hover:text-gray-600"
+                      ? "text-slate-600 hover:bg-slate-200"
+                      : "text-slate-400 hover:bg-slate-500 hover:text-white"
                   } opacity-0 group-hover:opacity-100`}
                   title="Close page"
                 >
@@ -66,8 +69,11 @@ const PageNavigation: React.FC<PageNavigationProps> = ({
 
         {/* Add Page Button */}
         <button
-          onClick={onAddPage}
-          className="ml-2 p-2 rounded-lg bg-blue-900 text-white hover:bg-blue-800 transition-all duration-200 flex items-center gap-1"
+          onClick={() => {
+            console.log('Add Page button clicked!')
+            onAddPage()
+          }}
+          className="ml-4 px-4 py-2 rounded-lg text-white transition-all duration-200 flex items-center gap-2 bg-blue-600 hover:bg-blue-700 shadow-sm hover:shadow-md"
           title="Add new page"
         >
           <Plus className="w-4 h-4" />

@@ -38,11 +38,11 @@ const NotationPalette: React.FC<NotationPaletteProps> = ({
   }
 
   return (
-    <div className="w-64 bg-gradient-to-b from-slate-900 to-slate-800 border-r border-slate-700 shadow-2xl flex flex-col h-full">
+    <div className="w-64 bg-slate-900 border-r border-slate-700 shadow-lg flex flex-col h-full">
       {/* Header */}
       <div className="p-4 border-b border-slate-700 flex-shrink-0">
         <div className="flex items-center gap-3 mb-2">
-          <div className="p-2 bg-purple-600 rounded-lg">
+          <div className="p-2 bg-blue-600 rounded-lg">
             <Music className="w-5 h-5 text-white" />
           </div>
           <h2 className="text-lg font-semibold text-white">DNG Notation Palette</h2>
@@ -59,7 +59,7 @@ const NotationPalette: React.FC<NotationPaletteProps> = ({
             placeholder="Search notations..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-10 pr-4 py-2 bg-slate-800 border border-slate-600 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+            className="w-full pl-10 pr-4 py-2 bg-slate-800 border border-slate-600 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
           />
         </div>
       </div>
@@ -71,7 +71,7 @@ const NotationPalette: React.FC<NotationPaletteProps> = ({
             onClick={() => setShowCase("all")}
             className={`flex-1 py-2 px-2 rounded-md text-xs font-medium transition-all duration-200 ${
               showCase === "all"
-                ? "bg-purple-600 text-white shadow-md"
+                ? "bg-blue-600 text-white shadow-sm"
                 : "text-slate-300 hover:text-white hover:bg-slate-700"
             }`}
           >
@@ -81,7 +81,7 @@ const NotationPalette: React.FC<NotationPaletteProps> = ({
             onClick={() => setShowCase("lowercase")}
             className={`flex-1 py-2 px-2 rounded-md text-xs font-medium transition-all duration-200 ${
               showCase === "lowercase"
-                ? "bg-purple-600 text-white shadow-md"
+                ? "bg-blue-600 text-white shadow-sm"
                 : "text-slate-300 hover:text-white hover:bg-slate-700"
             }`}
           >
@@ -91,7 +91,7 @@ const NotationPalette: React.FC<NotationPaletteProps> = ({
             onClick={() => setShowCase("uppercase")}
             className={`flex-1 py-2 px-2 rounded-md text-xs font-medium transition-all duration-200 ${
               showCase === "uppercase"
-                ? "bg-purple-600 text-white shadow-md"
+                ? "bg-blue-600 text-white shadow-sm"
                 : "text-slate-300 hover:text-white hover:bg-slate-700"
             }`}
           >
@@ -104,7 +104,7 @@ const NotationPalette: React.FC<NotationPaletteProps> = ({
       <div className="flex-1 overflow-y-auto">
         <div className="p-4 space-y-2">
           <div className="flex items-center gap-2 mb-3">
-            <Music4 className="w-4 h-4 text-purple-400" />
+            <Music4 className="w-4 h-4 text-blue-400" />
             <h3 className="text-sm font-medium text-white">Notations ({getFilteredNotations().length})</h3>
           </div>
 
@@ -115,9 +115,9 @@ const NotationPalette: React.FC<NotationPaletteProps> = ({
                 onNotationSelect(notation)
                 console.log("Notation selected:", notation.name, notation.alphabet) // NEW: Log selection
               }}
-              className={`w-full p-3 rounded-lg border transition-all duration-200 hover:shadow-md group ${
+              className={`w-full p-3 rounded-lg border transition-all duration-200 hover:shadow-sm group ${
                 selectedNotation?.id === notation.id
-                  ? "border-purple-500 bg-purple-500/10 shadow-md shadow-purple-500/20"
+                  ? "border-blue-500 bg-blue-500/10 shadow-sm shadow-blue-500/20"
                   : "border-slate-600 hover:border-slate-500 bg-slate-800/50 hover:bg-slate-700/50"
               }`}
             >
@@ -141,7 +141,7 @@ const NotationPalette: React.FC<NotationPaletteProps> = ({
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
-                  {selectedNotation?.id === notation.id && <Circle className="w-3 h-3 text-purple-400 fill-current" />}
+                  {selectedNotation?.id === notation.id && <Circle className="w-3 h-3 text-blue-400 fill-current" />}
                   <Keyboard className="w-3 h-3 text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity" />
                 </div>
               </div>
@@ -164,7 +164,7 @@ const NotationPalette: React.FC<NotationPaletteProps> = ({
       <div className="p-4 border-t border-slate-700 flex-shrink-0">
         <div className="bg-slate-800/50 rounded-lg p-3 border border-slate-600">
           <div className="flex items-center gap-2 mb-2">
-            <Keyboard className="w-4 h-4 text-purple-400" />
+            <Keyboard className="w-4 h-4 text-blue-400" />
             <h3 className="text-sm font-medium text-white">Keyboard Shortcuts</h3>
           </div>
           <div className="text-xs text-slate-400 space-y-1">

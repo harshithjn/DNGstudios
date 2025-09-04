@@ -654,6 +654,7 @@ const ScoreSheet: React.FC<ScoreSheetProps> = ({
           y: finalY,
           staveIndex: 0,
           octave: 4,
+          flipped: false,
         }
         console.log('Calling onAddNote with:', newNote)
         onAddNote(newNote)
@@ -687,7 +688,8 @@ const ScoreSheet: React.FC<ScoreSheetProps> = ({
         x: finalX,
         y: finalY,
         staveIndex: 0,
-        octave: 4
+        octave: 4,
+        flipped: false
       }
       console.log('Calling onAddNote with (keyboard):', newNote)
       onAddNote(newNote)
@@ -1227,27 +1229,27 @@ const ScoreSheet: React.FC<ScoreSheetProps> = ({
     >
       <div className="max-w-7xl mx-auto p-8">
         {/* Compact Header */}
-        <div className="bg-white rounded-xl shadow-lg border border-gray-200 mb-6">
+        <div className="bg-slate-800 rounded-lg shadow-sm border border-slate-700 mb-6">
           <div className="flex items-center justify-between p-4">
             <div className="flex items-center gap-6">
               <div>
-                <h2 className="text-xl font-bold text-gray-800 mb-1">{currentPage.title}</h2>
-                <div className="flex items-center gap-4 text-sm text-gray-600">
+                <h2 className="text-xl font-bold text-white mb-1">{currentPage.title}</h2>
+                <div className="flex items-center gap-4 text-sm text-slate-300">
                   <div className="flex items-center gap-1">
                     <Music className="w-3 h-3" />
                     <span>{currentPage.notes.length} notations</span>
                   </div>
-                  <span>•</span>
+                  <span className="text-slate-500">•</span>
                   <div className="flex items-center gap-1">
                     <Keyboard className="w-3 h-3" />
-                    <span className={keyboardEnabled ? "text-green-600 font-medium" : "text-red-600"}>
+                    <span className={keyboardEnabled ? "text-green-400 font-medium" : "text-red-400"}>
                       Keyboard {keyboardEnabled ? "ON" : "OFF"}
                     </span>
                   </div>
-                  <span>•</span>
+                  <span className="text-slate-500">•</span>
                   <div className="flex items-center gap-1">
                     <Music className="w-3 h-3" />
-                    <span className={midiEnabled ? "text-green-600 font-medium" : "text-red-600"}>
+                    <span className={midiEnabled ? "text-green-400 font-medium" : "text-red-400"}>
                       MIDI {midiEnabled ? "ON" : "OFF"}
                     </span>
                   </div>
@@ -1260,7 +1262,7 @@ const ScoreSheet: React.FC<ScoreSheetProps> = ({
               <div className="relative">
                 <button
                   onClick={() => setShowSettingsDropdown(!showSettingsDropdown)}
-                  className="flex items-center gap-1 px-2.5 py-1.5 rounded-md text-xs font-medium transition-all duration-200 bg-gray-600 text-white hover:bg-gray-700"
+                  className="flex items-center gap-1 px-2.5 py-1.5 rounded-md text-xs font-medium transition-all duration-200 bg-slate-700 text-white hover:bg-slate-600"
                 >
                   <Settings className="w-3 h-3" />
                   Score Settings
@@ -1601,7 +1603,7 @@ const ScoreSheet: React.FC<ScoreSheetProps> = ({
                 className={`flex items-center gap-1 px-2.5 py-1.5 rounded-md text-xs font-medium transition-all duration-200 ${
                   keyboardEnabled
                     ? "bg-green-600 text-white hover:bg-green-700"
-                    : "bg-gray-600 text-white hover:bg-gray-700"
+                    : "bg-slate-700 text-white hover:bg-slate-600"
                 }`}
               >
                 <Keyboard className="w-3 h-3" />
@@ -1612,7 +1614,7 @@ const ScoreSheet: React.FC<ScoreSheetProps> = ({
                 className={`flex items-center gap-1 px-2.5 py-1.5 rounded-md text-xs font-medium transition-all duration-200 ${
                   midiEnabled
                     ? "bg-green-600 text-white hover:bg-green-700"
-                    : "bg-gray-600 text-white hover:bg-gray-700"
+                    : "bg-slate-700 text-white hover:bg-slate-600"
                 }`}
               >
                 <Music className="w-3 h-3" />
@@ -1628,7 +1630,7 @@ const ScoreSheet: React.FC<ScoreSheetProps> = ({
                     onUndo()
                   }}
                   disabled={!canUndo}
-                  className="flex items-center gap-1 px-2.5 py-1.5 bg-gray-600 text-white rounded-md hover:bg-gray-700 transition-all duration-200 text-xs font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="flex items-center gap-1 px-2.5 py-1.5 bg-slate-700 text-white rounded-md hover:bg-slate-600 transition-all duration-200 text-xs font-medium disabled:opacity-50 disabled:cursor-not-allowed"
                   title="Undo (Ctrl+Z)"
                 >
                   <RotateCcw className="w-3 h-3" />
@@ -1640,7 +1642,7 @@ const ScoreSheet: React.FC<ScoreSheetProps> = ({
                     onRedo()
                   }}
                   disabled={!canRedo}
-                  className="flex items-center gap-1 px-2.5 py-1.5 bg-gray-600 text-white rounded-md hover:bg-gray-700 transition-all duration-200 text-xs font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="flex items-center gap-1 px-2.5 py-1.5 bg-slate-700 text-white rounded-md hover:bg-slate-600 transition-all duration-200 text-xs font-medium disabled:opacity-50 disabled:cursor-not-allowed"
                   title="Redo (Ctrl+Y)"
                 >
                   <RotateCcw className="w-3 h-3 rotate-180" />
@@ -1652,56 +1654,6 @@ const ScoreSheet: React.FC<ScoreSheetProps> = ({
           </div>
         </div>
 
-        {/* Status Banner */}
-        {(keyboardEnabled || midiEnabled) ||
-          isTextMode ||
-          isLyricsMode ||
-          isHighlighterMode ||
-          isStemMode ||
-          selectedArticulation ||
-          (selectedNotation && !keyboardEnabled && !midiEnabled) ? (
-            <div className="mb-4 bg-blue-50 border border-blue-200 rounded-lg p-3">
-              <div className="flex items-center justify-between text-sm">
-                <div className="flex items-center gap-2 text-blue-800">
-                  {keyboardEnabled && <Keyboard className="w-4 h-4" />}
-                  {midiEnabled && <Music className="w-4 h-4" />}
-                  {isTextMode && <Type className="w-4 h-4" />}
-                  {isLyricsMode && <Music className="w-4 h-4" />}
-                  {isHighlighterMode && <span className="text-lg">🎨</span>}
-                  {isStemMode && <span className="text-lg">🎵</span>}
-                  {selectedArticulation && <span className="text-lg">♪</span>}
-                  {selectedNotation && !keyboardEnabled && !midiEnabled && <Music className="w-4 h-4" />}
-
-                  <span className="font-medium">
-                    {scoreMode === 'dnr' ? '[DNR Mode] ' : ''}
-                    {isTextMode
-                      ? "Text Mode Active - Click anywhere to add text"
-                      : isLyricsMode
-                        ? "Lyrics Mode Active - Click anywhere to add lyrics"
-                        : isHighlighterMode
-                          ? "Highlighter Mode Active - Click and drag to highlight areas"
-                          : isStemMode
-                            ? "Stem Mode Active - Select and place stem images"
-                          : selectedArticulation
-                            ? `Articulation Mode Active - ${selectedArticulation}`
-                            : selectedNotation && !keyboardEnabled && !midiEnabled
-                              ? "Note Placement Mode Active - Click anywhere to place notes, click on notes to delete"
-                              : keyboardEnabled && midiEnabled
-                                ? "Keyboard & MIDI Modes Active - Press Backspace/Delete to delete last note, click notes to select and drag"
-                                : keyboardEnabled
-                                  ? "Keyboard Mode Active - Press Backspace/Delete to delete last note, click notes to select and drag"
-                                  : "MIDI Mode Active - Click notes to select and drag"}
-                  </span>
-                  <span className="text-gray-500 text-sm ml-4">
-                    Measure {getCurrentMeasureInfo().measureNumber}, Beat {getCurrentMeasureInfo().beatNumber}/{getCurrentMeasureInfo().totalBeats}
-                    <span className="ml-4 text-xs">
-                      Ctrl+Z: Undo | Ctrl+Y: Redo
-                    </span>
-                  </span>
-                </div>
-              </div>
-            </div>
-          ) : null}
 
 
 
@@ -1857,7 +1809,8 @@ const ScoreSheet: React.FC<ScoreSheetProps> = ({
                           : 'drop-shadow-md'
                     }`}
                     style={{
-                      imageRendering: '-webkit-optimize-contrast'
+                      imageRendering: '-webkit-optimize-contrast',
+                      transform: placedNote.flipped ? 'rotate(180deg)' : 'rotate(0deg)'
                     }}
                   />
 
@@ -1868,19 +1821,35 @@ const ScoreSheet: React.FC<ScoreSheetProps> = ({
                     </div>
                   )}
 
-                  {/* Delete button - only show when selected */}
+                  {/* Action buttons - only show when selected */}
                   {selectedNoteId === placedNote.id && (
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        console.log("Delete button clicked for note:", placedNote.id)
-                        onRemoveNote(placedNote.id)
-                        setSelectedNoteId(null) // Clear selection after deletion
-                      }}
-                      className="absolute -top-3 -right-3 w-6 h-6 bg-red-500 text-white rounded-full opacity-100 transition-all duration-300 flex items-center justify-center text-sm font-bold shadow-lg hover:bg-red-600"
-                    >
-                      &times;
-                    </button>
+                    <div className="absolute -top-3 -right-3 flex gap-1">
+                      {/* Flip button */}
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          console.log("Flip button clicked for note:", placedNote.id)
+                          onUpdateNote(placedNote.id, { flipped: !placedNote.flipped })
+                        }}
+                        className="w-6 h-6 bg-blue-500 text-white rounded-full opacity-100 transition-all duration-300 flex items-center justify-center text-sm font-bold shadow-lg hover:bg-blue-600"
+                        title="Flip note"
+                      >
+                        ↻
+                      </button>
+                      {/* Delete button */}
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          console.log("Delete button clicked for note:", placedNote.id)
+                          onRemoveNote(placedNote.id)
+                          setSelectedNoteId(null) // Clear selection after deletion
+                        }}
+                        className="w-6 h-6 bg-red-500 text-white rounded-full opacity-100 transition-all duration-300 flex items-center justify-center text-sm font-bold shadow-lg hover:bg-red-600"
+                        title="Delete note"
+                      >
+                        &times;
+                      </button>
+                    </div>
                   )}
                 </div>
               </div>

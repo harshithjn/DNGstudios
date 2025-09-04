@@ -3,7 +3,7 @@
 import type React from "react"
 import { useState, useEffect } from "react"
 import { Plus, Music2, Calendar, User, FileText, Trash2, Edit, Search, Loader2, RotateCcw, LogOut, ArrowLeft } from "lucide-react"
-import { useSupabase } from "../hooks/useSupabase"
+import { useLocalStorage } from "../hooks/useLocalStorage"
 
 interface HomePageProps {
   onOpenProject: (projectId: string, projectType: "DNG" | "DNR") => void
@@ -12,7 +12,7 @@ interface HomePageProps {
 }
 
 const HomePage: React.FC<HomePageProps> = ({ onOpenProject, onLogout, onBackToLanding }) => {
-  const { projects, loading, error, createProject, deleteProject } = useSupabase()
+  const { projects, loading, error, createProject, deleteProject } = useLocalStorage()
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [searchTerm, setSearchTerm] = useState("")
   const [isLoaded, setIsLoaded] = useState(false)

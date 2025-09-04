@@ -27,11 +27,17 @@ export const useUndoRedo = (initialState: HistoryState) => {
 
   const pushState = useCallback((newState: HistoryState) => {
     console.log('Pushing state to history:', newState.notes.length, 'notes')
-    // Always add current state to history before updating
-    setHistory(prev => {
-      const newHistory = [...prev, currentState].slice(-maxHistorySize.current)
-      return newHistory
-    })
+    console.log('Current state has:', currentState.notes.length, 'notes')
+    
+    // Only add current state to history if it's different from the new state
+    // and if it has content (to avoid adding empty states)
+    if (JSON.stringify(currentState) !== JSON.stringify(newState) && 
+        (currentState.notes.length > 0 || currentState.textElements.length > 0 || currentState.articulationElements.length > 0)) {
+      setHistory(prev => {
+        const newHistory = [...prev, currentState].slice(-maxHistorySize.current)
+        return newHistory
+      })
+    }
     setCurrentState(newState)
     setFuture([]) // Clear future when new action is performed
   }, [currentState])
