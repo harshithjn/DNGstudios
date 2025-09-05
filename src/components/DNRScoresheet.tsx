@@ -226,7 +226,7 @@ const DNRScoresheet: React.FC<DNRScoresheetProps> = ({
         x: x,
         y: KEYBOARD_LINE_Y_POSITIONS[0] - 50,
         height: KEYBOARD_LINE_Y_POSITIONS[KEYBOARD_LINE_Y_POSITIONS.length - 1] + 50,
-        width: 2
+        width: 1
       })
     }
     return lines
@@ -256,6 +256,9 @@ const DNRScoresheet: React.FC<DNRScoresheetProps> = ({
   const [resizingArticulationId, setResizingArticulationId] = useState<string | null>(null)
   const [resizeStartY, setResizeStartY] = useState(0)
   const [resizeStartHeight, setResizeStartHeight] = useState(0)
+  const [resizeStartX, setResizeStartX] = useState(0)
+  const [resizeStartWidth, setResizeStartWidth] = useState(0)
+  
   
 
 
@@ -337,10 +340,25 @@ const DNRScoresheet: React.FC<DNRScoresheetProps> = ({
 
       setResizingArticulationId(articulationId)
       setResizeStartY(e.clientY)
-      setResizeStartHeight(art.height || 100)
+      setResizeStartHeight(art.height || 50)
     },
     [articulationElements, onUpdateArticulation],
   )
+
+  const handleArticulationWidthResizeMouseDown = useCallback(
+    (e: React.MouseEvent, articulationId: string) => {
+      e.preventDefault()
+      e.stopPropagation()
+      const art = articulationElements.find((a) => a.id === articulationId)
+      if (!art || !onUpdateArticulation) return
+
+      setResizingArticulationId(articulationId)
+      setResizeStartX(e.clientX)
+      setResizeStartWidth(art.width || 100)
+    },
+    [articulationElements, onUpdateArticulation],
+  )
+
 
   const handleArticulationMouseMove = useCallback(
     (e: React.MouseEvent) => {
@@ -358,22 +376,42 @@ const DNRScoresheet: React.FC<DNRScoresheetProps> = ({
       }
       
       if (resizingArticulationId) {
-        const deltaY = e.clientY - resizeStartY
-        const newHeight = Math.max(20, resizeStartHeight + deltaY)
-        try {
-          onUpdateArticulation(resizingArticulationId, { height: newHeight })
-        } catch (error) {
-          console.warn('onUpdateArticulation not available:', error)
+        const art = articulationElements.find((a) => a.id === resizingArticulationId)
+        if (art) {
+          if (art.type === 'tie' && resizeStartX !== 0) {
+            // Width resize for ties
+            const deltaX = e.clientX - resizeStartX
+            const newWidth = Math.max(50, resizeStartWidth + deltaX)
+            try {
+              onUpdateArticulation(resizingArticulationId, { width: newWidth })
+            } catch (error) {
+              console.warn('onUpdateArticulation not available:', error)
+            }
+          } else {
+            // Height resize for other extensible elements
+            const deltaY = e.clientY - resizeStartY
+            const newHeight = Math.max(20, resizeStartHeight + deltaY)
+            try {
+              onUpdateArticulation(resizingArticulationId, { height: newHeight })
+            } catch (error) {
+              console.warn('onUpdateArticulation not available:', error)
+            }
+          }
         }
       }
+      
     },
-    [draggedArticulationId, articulationDragOffset, onUpdateArticulation, resizingArticulationId, resizeStartY, resizeStartHeight],
+    [draggedArticulationId, articulationDragOffset, onUpdateArticulation, resizingArticulationId, resizeStartY, resizeStartHeight, resizeStartX, resizeStartWidth, articulationElements],
   )
 
   const handleArticulationMouseUp = useCallback(() => {
     setDraggedArticulationId(null)
     setArticulationDragOffset({ x: 0, y: 0 })
     setResizingArticulationId(null)
+    setResizeStartY(0)
+    setResizeStartHeight(0)
+    setResizeStartX(0)
+    setResizeStartWidth(0)
   }, [])
 
   // Note drag handlers
@@ -675,7 +713,7 @@ const DNRScoresheet: React.FC<DNRScoresheetProps> = ({
         { id: "mordent", name: "Mordent", symbol: "𝄽" },
         { id: "turn", name: "Turn", symbol: "𝄾" },
         { id: "slur", name: "Slur", symbol: "⌒" },
-        { id: "tie", name: "Tie", symbol: "⌒" },
+        { id: "tie", name: "Tie", symbol: "⌒", isExtensible: true },
         { id: "black-dot", name: "Black Dot", symbol: "●" },
         { id: "outline-dot", name: "Outline Dot", symbol: "○" },
       ]
@@ -695,7 +733,8 @@ const DNRScoresheet: React.FC<DNRScoresheetProps> = ({
           symbol: articulation.symbol,
           x: Math.max(20, Math.min(x, rect.width - 20)),
           y: Math.max(20, Math.min(y, rect.height - 20)),
-          height: articulation.isExtensible ? 100 : undefined, // Default height for extensible elements
+          height: articulation.isExtensible ? 50 : undefined, // Default height for extensible elements
+          width: articulation.isExtensible ? 100 : undefined, // Default width for extensible elements
           isExtensible: articulation.isExtensible || false,
         }
         try {
@@ -1147,7 +1186,7 @@ const DNRScoresheet: React.FC<DNRScoresheetProps> = ({
                           symbol: '|',
                           x: nextNotePosition,
                           y: currentKeyboardLineY - 50,
-                          height: 100,
+                          height: 50,
                           isExtensible: true,
                         }
                         onAddArticulation?.(newBarLine)
@@ -1168,7 +1207,7 @@ const DNRScoresheet: React.FC<DNRScoresheetProps> = ({
                           symbol: '||',
                           x: nextNotePosition,
                           y: currentKeyboardLineY - 50,
-                          height: 100,
+                          height: 50,
                           isExtensible: true,
                         }
                         onAddArticulation?.(newDoubleBarLine)
@@ -1535,34 +1574,65 @@ const DNRScoresheet: React.FC<DNRScoresheetProps> = ({
                   {articulation.type === 'stem' ? (
                     <div 
                       className="flex items-center justify-center"
-                      style={{ height: articulation.height || 100 }}
+                      style={{ height: articulation.height || 50 }}
                     >
                       <img
                         src={`/Stem/${articulation.symbol}`}
                         alt={articulation.name}
                         className="object-contain"
                         style={{ 
-                          height: `${articulation.height || 100}px`,
-                          maxWidth: `${articulation.height || 100}px`
+                          height: `${articulation.height || 50}px`,
+                          maxWidth: `${articulation.height || 50}px`
                         }}
                       />
                     </div>
                   ) : articulation.isExtensible ? (
                     <div 
                       className="flex items-center justify-center"
-                      style={{ height: articulation.height || 100 }}
+                      style={{ 
+                        height: articulation.height || 50,
+                        width: articulation.width || (articulation.type === 'tie' ? 100 : 'auto')
+                      }}
                     >
-                      <span 
-                        className="text-gray-800 font-light drop-shadow-md"
-                        style={{ 
-                          fontSize: `${articulation.height || 100}px`,
-                          lineHeight: '1',
-                          display: 'block',
-                          letterSpacing: articulation.symbol === '||' ? '-0.1em' : '0'
-                        }}
-                      >
-                        {articulation.symbol}
-                      </span>
+                      {articulation.type === 'tie' ? (
+                        <svg
+                          width={articulation.width || 100}
+                          height={articulation.height || 50}
+                          viewBox="0 0 100 50"
+                          className="drop-shadow-md transition-transform duration-100"
+                        >
+                          <path
+                            d={articulation.flipped 
+                              ? "M 10 25 Q 50 45 90 25" 
+                              : "M 10 25 Q 50 5 90 25"
+                            }
+                            fill="none"
+                            stroke="#374151"
+                            strokeWidth="3"
+                            strokeLinecap="round"
+                            className="cursor-ew-resize hover:stroke-blue-500 transition-colors duration-200"
+                            onMouseDown={(e) => {
+                              e.stopPropagation()
+                              if (onUpdateArticulation) {
+                                handleArticulationWidthResizeMouseDown(e, articulation.id)
+                              }
+                            }}
+                            title="Drag to extend tie"
+                          />
+                        </svg>
+                      ) : (
+                        <span 
+                          className="text-gray-800 font-light drop-shadow-md"
+                          style={{ 
+                            fontSize: `${articulation.height || 50}px`,
+                            lineHeight: '1',
+                            display: 'block',
+                            letterSpacing: articulation.symbol === '||' ? '-0.1em' : '0'
+                          }}
+                        >
+                          {articulation.symbol}
+                        </span>
+                      )}
                     </div>
                   ) : (
                     <span className="text-3xl text-gray-800 font-bold drop-shadow-md">{articulation.symbol}</span>
@@ -1579,13 +1649,37 @@ const DNRScoresheet: React.FC<DNRScoresheetProps> = ({
                     &times;
                   </button>
                   
-                  {/* Resize handle for extensible articulations */}
+                  {/* Resize handles for extensible articulations */}
                   {articulation.isExtensible && (
-                    <div
-                      className="absolute -bottom-2 left-1/2 transform -translate-x-1/2 w-4 h-2 bg-blue-500 rounded cursor-ns-resize opacity-0 group-hover:opacity-100 transition-all duration-300 hover:bg-blue-600"
-                      onMouseDown={onUpdateArticulation ? (e) => handleArticulationResizeMouseDown(e, articulation.id) : undefined}
-                      title="Resize bar line"
-                    />
+                    <>
+                      {/* Height resize handle */}
+                      <div
+                        className="absolute -bottom-2 left-1/2 transform -translate-x-1/2 w-4 h-2 bg-blue-500 rounded cursor-ns-resize opacity-0 group-hover:opacity-100 transition-all duration-300 hover:bg-blue-600"
+                        onMouseDown={onUpdateArticulation ? (e) => handleArticulationResizeMouseDown(e, articulation.id) : undefined}
+                        title="Resize height"
+                      />
+                      {/* Width resize handle for ties */}
+                      {articulation.type === 'tie' && (
+                        <div
+                          className="absolute -right-2 top-1/2 transform -translate-y-1/2 w-2 h-4 bg-green-500 rounded cursor-ew-resize opacity-0 group-hover:opacity-100 transition-all duration-300 hover:bg-green-600"
+                          onMouseDown={onUpdateArticulation ? (e) => handleArticulationWidthResizeMouseDown(e, articulation.id) : undefined}
+                          title="Resize width"
+                        />
+                      )}
+                      {/* Flip button for ties */}
+                      {articulation.type === 'tie' && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            onUpdateArticulation?.(articulation.id, { flipped: !articulation.flipped })
+                          }}
+                          className="absolute -left-2 top-1/2 transform -translate-y-1/2 w-6 h-6 bg-purple-500 rounded-full opacity-0 group-hover:opacity-100 transition-all duration-300 hover:bg-purple-600 flex items-center justify-center text-white text-xs font-bold"
+                          title="Flip tie direction"
+                        >
+                          ↕
+                        </button>
+                      )}
+                    </>
                   )}
                 </div>
               </div>

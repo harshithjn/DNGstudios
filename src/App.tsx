@@ -37,7 +37,9 @@ export interface ArticulationElement {
   x: number
   y: number
   height?: number // For extensible bar lines
+  width?: number // For extensible elements like ties
   isExtensible?: boolean // Flag to identify extensible elements
+  flipped?: boolean // For ties to curve upward or downward
 }
 
 export interface LyricElement {
