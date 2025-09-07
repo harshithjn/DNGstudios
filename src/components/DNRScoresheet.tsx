@@ -17,7 +17,7 @@ import {
 import { notations, getNotationByKey, type Notation } from "../data/notations"
 import html2canvas from "html2canvas"
 import jsPDF from "jspdf"
-import type { TextElement, ArticulationElement, LyricElement, HighlighterElement } from "../App"
+import type { TextElement, ArticulationElement, LyricElement, HighlighterElement, DrawingElement } from "../App"
 import type { LayoutSettings } from "./LayoutSettings"
 import PianoComponent from "./Piano"
 import { useCursorNavigation } from "../hooks/useCursorNavigation"
@@ -74,6 +74,14 @@ interface DNRScoresheetProps {
   onUpdateHighlighter?: (id: string, updates: Partial<HighlighterElement>) => void
   layoutSettings?: LayoutSettings
   onUpdateLayoutSettings?: (settings: Partial<LayoutSettings>) => void
+  
+  // Drawing tools
+  isDrawingMode?: boolean
+  isEraserMode?: boolean
+  drawingElements?: DrawingElement[]
+  onAddDrawingElement?: (element: DrawingElement) => void
+  onRemoveDrawingElement?: (id: string) => void
+  
   canUndo?: boolean
   canRedo?: boolean
   onUndo?: () => void
@@ -189,6 +197,24 @@ const DNRScoresheet: React.FC<DNRScoresheetProps> = ({
   onUpdateArticulation,
   selectedArticulation,
   isTextMode,
+  isLyricsMode = false,
+  isHighlighterMode = false,
+  selectedHighlighterColor = 'yellow',
+  lyricElements = [],
+  onAddLyric,
+  onRemoveLyric,
+  onUpdateLyric,
+  highlighterElements = [],
+  onAddHighlighter,
+  onRemoveHighlighter,
+  onUpdateHighlighter,
+  layoutSettings,
+  onUpdateLayoutSettings,
+  isDrawingMode = false,
+  isEraserMode = false,
+  drawingElements = [],
+  onAddDrawingElement,
+  onRemoveDrawingElement,
   canUndo,
   canRedo,
   onUndo,
@@ -214,6 +240,12 @@ const DNRScoresheet: React.FC<DNRScoresheetProps> = ({
   const [selectedStem, setSelectedStem] = useState<string | null>(null)
   const [showBarLines, setShowBarLines] = useState(false)
   const [barLineSpacing, setBarLineSpacing] = useState(200)
+  
+  // Drawing state
+  const [isDrawing, setIsDrawing] = useState(false)
+  const [currentPath, setCurrentPath] = useState<{ x: number; y: number }[]>([])
+  const [drawingColor, setDrawingColor] = useState('#000000')
+  const [drawingWidth, setDrawingWidth] = useState(2)
 
   // Generate bar lines function
   const generateBarLines = useCallback(() => {
@@ -378,17 +410,19 @@ const DNRScoresheet: React.FC<DNRScoresheetProps> = ({
       if (resizingArticulationId) {
         const art = articulationElements.find((a) => a.id === resizingArticulationId)
         if (art) {
-          if (art.type === 'tie' && resizeStartX !== 0) {
-            // Width resize for ties
-            const deltaX = e.clientX - resizeStartX
-            const newWidth = Math.max(50, resizeStartWidth + deltaX)
-            try {
-              onUpdateArticulation(resizingArticulationId, { width: newWidth })
-            } catch (error) {
-              console.warn('onUpdateArticulation not available:', error)
+          if (art.type === 'tie' || art.type === 'slur') {
+            // Width resize for ties and slurs (stretchable but not expandable)
+            if (resizeStartX !== 0) {
+              const deltaX = e.clientX - resizeStartX
+              const newWidth = Math.max(50, resizeStartWidth + deltaX)
+              try {
+                onUpdateArticulation(resizingArticulationId, { width: newWidth })
+              } catch (error) {
+                console.warn('onUpdateArticulation not available:', error)
+              }
             }
           } else {
-            // Height resize for other extensible elements
+            // Height resize for other extensible elements (bar lines, etc.)
             const deltaY = e.clientY - resizeStartY
             const newHeight = Math.max(20, resizeStartHeight + deltaY)
             try {
@@ -484,6 +518,71 @@ const DNRScoresheet: React.FC<DNRScoresheetProps> = ({
       console.log("No notes to delete")
     }
   }, [currentPage.notes, onRemoveNote])
+
+  // Drawing handlers
+  const handleDrawingMouseDown = useCallback((event: React.MouseEvent<HTMLDivElement>) => {
+    if (!isDrawingMode || isEraserMode) return
+    
+    const rect = event.currentTarget.getBoundingClientRect()
+    const x = event.clientX - rect.left
+    const y = event.clientY - rect.top
+    
+    setIsDrawing(true)
+    setCurrentPath([{ x, y }])
+  }, [isDrawingMode, isEraserMode])
+
+  const handleDrawingMouseMove = useCallback((event: React.MouseEvent<HTMLDivElement>) => {
+    if (!isDrawing || !isDrawingMode) return
+    
+    const rect = event.currentTarget.getBoundingClientRect()
+    const x = event.clientX - rect.left
+    const y = event.clientY - rect.top
+    
+    setCurrentPath(prev => [...prev, { x, y }])
+  }, [isDrawing, isDrawingMode])
+
+  const handleDrawingMouseUp = useCallback(() => {
+    if (!isDrawing || !isDrawingMode || currentPath.length < 2) {
+      setIsDrawing(false)
+      setCurrentPath([])
+      return
+    }
+    
+    const newDrawingElement: DrawingElement = {
+      id: Date.now().toString(),
+      type: 'path',
+      points: currentPath,
+      strokeColor: drawingColor,
+      strokeWidth: drawingWidth,
+      opacity: 1
+    }
+    
+    onAddDrawingElement?.(newDrawingElement)
+    setIsDrawing(false)
+    setCurrentPath([])
+  }, [isDrawing, isDrawingMode, currentPath, drawingColor, drawingWidth, onAddDrawingElement])
+
+  // Eraser handlers
+  const handleEraserMouseDown = useCallback((event: React.MouseEvent<HTMLDivElement>) => {
+    if (!isEraserMode) return
+    
+    const rect = event.currentTarget.getBoundingClientRect()
+    const x = event.clientX - rect.left
+    const y = event.clientY - rect.top
+    
+    // Find drawing elements within eraser radius
+    const eraserRadius = 20
+    const elementsToRemove = drawingElements.filter(element => {
+      return element.points.some(point => {
+        const distance = Math.sqrt((point.x - x) ** 2 + (point.y - y) ** 2)
+        return distance <= eraserRadius
+      })
+    })
+    
+    elementsToRemove.forEach(element => {
+      onRemoveDrawingElement?.(element.id)
+    })
+  }, [isEraserMode, drawingElements, onRemoveDrawingElement])
 
   const placeNotation = useCallback(
     (mappedNotation: Notation, customX?: number, customY?: number) => {
@@ -1321,6 +1420,23 @@ const DNRScoresheet: React.FC<DNRScoresheetProps> = ({
               document.body.focus()
             }
           }}
+          onMouseDown={(e) => {
+            if (isDrawingMode) {
+              handleDrawingMouseDown(e)
+            } else if (isEraserMode) {
+              handleEraserMouseDown(e)
+            }
+          }}
+          onMouseMove={(e) => {
+            if (isDrawingMode) {
+              handleDrawingMouseMove(e)
+            }
+          }}
+          onMouseUp={(e) => {
+            if (isDrawingMode) {
+              handleDrawingMouseUp()
+            }
+          }}
           tabIndex={keyboardEnabled ? 0 : -1}
         >
           {/* DNR Background Image */}
@@ -1652,14 +1768,16 @@ const DNRScoresheet: React.FC<DNRScoresheetProps> = ({
                   {/* Resize handles for extensible articulations */}
                   {articulation.isExtensible && (
                     <>
-                      {/* Height resize handle */}
-                      <div
-                        className="absolute -bottom-2 left-1/2 transform -translate-x-1/2 w-4 h-2 bg-blue-500 rounded cursor-ns-resize opacity-0 group-hover:opacity-100 transition-all duration-300 hover:bg-blue-600"
-                        onMouseDown={onUpdateArticulation ? (e) => handleArticulationResizeMouseDown(e, articulation.id) : undefined}
-                        title="Resize height"
-                      />
-                      {/* Width resize handle for ties */}
-                      {articulation.type === 'tie' && (
+                      {/* Height resize handle - only for non-tie/slur elements */}
+                      {articulation.type !== 'tie' && articulation.type !== 'slur' && (
+                        <div
+                          className="absolute -bottom-2 left-1/2 transform -translate-x-1/2 w-4 h-2 bg-blue-500 rounded cursor-ns-resize opacity-0 group-hover:opacity-100 transition-all duration-300 hover:bg-blue-600"
+                          onMouseDown={onUpdateArticulation ? (e) => handleArticulationResizeMouseDown(e, articulation.id) : undefined}
+                          title="Resize height"
+                        />
+                      )}
+                      {/* Width resize handle for ties and slurs */}
+                      {(articulation.type === 'tie' || articulation.type === 'slur') && (
                         <div
                           className="absolute -right-2 top-1/2 transform -translate-y-1/2 w-2 h-4 bg-green-500 rounded cursor-ew-resize opacity-0 group-hover:opacity-100 transition-all duration-300 hover:bg-green-600"
                           onMouseDown={onUpdateArticulation ? (e) => handleArticulationWidthResizeMouseDown(e, articulation.id) : undefined}
@@ -1684,6 +1802,64 @@ const DNRScoresheet: React.FC<DNRScoresheetProps> = ({
                 </div>
               </div>
             ))}
+
+            {/* Drawing elements */}
+            {drawingElements.map((drawingElement) => (
+              <svg
+                key={drawingElement.id}
+                className="absolute z-20 pointer-events-none"
+                style={{
+                  left: 0,
+                  top: 0,
+                  width: '100%',
+                  height: '100%',
+                }}
+              >
+                <path
+                  d={drawingElement.points.reduce((path, point, index) => {
+                    if (index === 0) {
+                      return `M ${point.x} ${point.y}`
+                    } else {
+                      return `${path} L ${point.x} ${point.y}`
+                    }
+                  }, '')}
+                  stroke={drawingElement.strokeColor}
+                  strokeWidth={drawingElement.strokeWidth}
+                  fill="none"
+                  opacity={drawingElement.opacity}
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </svg>
+            ))}
+
+            {/* Current drawing preview */}
+            {isDrawing && currentPath.length > 1 && (
+              <svg
+                className="absolute z-25 pointer-events-none"
+                style={{
+                  left: 0,
+                  top: 0,
+                  width: '100%',
+                  height: '100%',
+                }}
+              >
+                <path
+                  d={currentPath.reduce((path, point, index) => {
+                    if (index === 0) {
+                      return `M ${point.x} ${point.y}`
+                    } else {
+                      return `${path} L ${point.x} ${point.y}`
+                    }
+                  }, '')}
+                  stroke={drawingColor}
+                  strokeWidth={drawingWidth}
+                  fill="none"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </svg>
+            )}
 
             {/* Next note position indicator */}
             {(keyboardEnabled || midiEnabled) && !isTextMode && !selectedArticulation && (

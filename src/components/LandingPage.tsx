@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { ArrowRight, Code, Brain, Shield, Users, Play, User, Mail, Linkedin, X } from 'lucide-react'
+import { Code, Brain, Shield, Play, User, Mail, Linkedin, X } from 'lucide-react'
 
 interface LandingPageProps {
   onLaunchApp: () => void
@@ -14,9 +14,9 @@ const LandingPage: React.FC<LandingPageProps> = ({ onLaunchApp, onShowFeatures }
       {/* Navigation */}
       <nav className="flex items-center justify-between px-6 py-4 border-b border-gray-800">
         <div className="flex items-center space-x-8">
-                      <div className="text-2xl font-bold bg-gradient-to-r from-blue-400 to-purple-600 bg-clip-text text-transparent">
-              DNG Studios
-            </div>
+          <div className="text-2xl font-bold text-blue-400">
+            DNG Studios
+          </div>
           <div className="hidden md:flex space-x-6">
             <button 
               onClick={onShowFeatures}
@@ -29,7 +29,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onLaunchApp, onShowFeatures }
         <div className="flex items-center space-x-4">
           <button 
             onClick={onLaunchApp}
-            className="bg-gradient-to-r from-blue-600 to-purple-600 text-white px-6 py-2 rounded-lg hover:from-blue-700 hover:to-purple-700 transition-all duration-200 flex items-center space-x-2"
+            className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition-all duration-200 flex items-center space-x-2"
           >
             <Play className="w-4 h-4" />
             <span>Launch App</span>
@@ -40,26 +40,21 @@ const LandingPage: React.FC<LandingPageProps> = ({ onLaunchApp, onShowFeatures }
       {/* Hero Section */}
       <section className="px-6 py-20 text-center min-h-[80vh] flex items-center justify-center">
         <div className="max-w-4xl mx-auto">
-          <h1 className="text-6xl md:text-7xl font-bold mb-6">
-            The Desi
+          <h1 className="text-5xl md:text-6xl font-bold mb-8">
+            <span className="text-blue-400">DNG Studios</span>
             <br />
-            <span className="bg-gradient-to-r from-blue-400 to-purple-600 bg-clip-text text-transparent">
-              Music Notation
-            </span>
-            <br />
-            Editor
+            Music Notation
           </h1>
-          <p className="text-xl text-gray-400 mb-8 max-w-2xl mx-auto">
-            Built to make you extraordinarily productive, DNG Studios is the best way to create traditional Indian music notation.
+          <p className="text-lg text-gray-400 mb-12 max-w-xl mx-auto">
+            Professional music notation for traditional Indian compositions.
           </p>
           <div className="flex justify-center items-center">
             <button 
               onClick={onLaunchApp}
-              className="bg-gradient-to-r from-blue-600 to-purple-600 text-white px-8 py-4 rounded-lg hover:from-blue-700 hover:to-purple-700 transition-all duration-200 flex items-center space-x-2 text-lg font-medium shadow-lg shadow-blue-500/25"
+              className="bg-blue-600 text-white px-8 py-4 rounded-lg hover:bg-blue-700 transition-all duration-200 flex items-center space-x-2 text-lg font-medium"
             >
               <Play className="w-5 h-5" />
-              <span>Launch DNG Studios</span>
-              <ArrowRight className="w-5 h-5" />
+              <span>Get Started</span>
             </button>
           </div>
         </div>
@@ -68,6 +63,38 @@ const LandingPage: React.FC<LandingPageProps> = ({ onLaunchApp, onShowFeatures }
 
 
 
+
+      {/* Laptop Mockup Section */}
+      <section className="px-6 py-16 bg-black">
+        <div className="max-w-6xl mx-auto">
+          <div className="flex justify-center">
+            {/* Laptop Mockup */}
+            <div className="relative">
+              {/* Laptop Base */}
+              <div className="w-[600px] h-[375px] md:w-[800px] md:h-[500px] bg-gray-800 rounded-lg shadow-2xl relative">
+                {/* Screen */}
+                <div className="absolute top-3 left-3 right-3 bottom-3 md:top-4 md:left-4 md:right-4 md:bottom-4 bg-gray-900 rounded-lg overflow-hidden">
+                  {/* Screen Content */}
+                  <div className="w-full h-full bg-gray-900 flex items-center justify-center">
+                    {/* Mockup Image */}
+                    <img 
+                      src="/images/mockup.png" 
+                      alt="DNG Studios Interface Mockup" 
+                      className="w-full h-full object-cover rounded-lg"
+                    />
+                  </div>
+                </div>
+                
+                {/* Laptop Hinge */}
+                <div className="absolute -top-1 md:-top-2 left-1/2 transform -translate-x-1/2 w-12 h-3 md:w-16 md:h-4 bg-gray-700 rounded-t-lg"></div>
+              </div>
+              
+              {/* Laptop Stand/Base */}
+              <div className="absolute -bottom-6 md:-bottom-8 left-1/2 transform -translate-x-1/2 w-[700px] h-6 md:w-[900px] md:h-8 bg-gray-700 rounded-lg shadow-lg"></div>
+            </div>
+          </div>
+        </div>
+      </section>
 
       {/* About Dr Hamsalekha Section */}
       <section className="px-6 py-20 bg-black">
@@ -145,34 +172,34 @@ const LandingPage: React.FC<LandingPageProps> = ({ onLaunchApp, onShowFeatures }
       </section>
 
       {/* Features Grid */}
-      <section className="px-6 py-20">
-        <div className="max-w-6xl mx-auto">
+      <section className="px-6 py-16">
+        <div className="max-w-4xl mx-auto">
           <div className="grid md:grid-cols-3 gap-8">
             <div className="text-center">
-              <div className="w-16 h-16 bg-gradient-to-r from-blue-600 to-purple-600 rounded-lg flex items-center justify-center mx-auto mb-4">
-                <Brain className="w-8 h-8 text-white" />
+              <div className="w-12 h-12 bg-blue-600 rounded-lg flex items-center justify-center mx-auto mb-4">
+                <Brain className="w-6 h-6 text-white" />
               </div>
-              <h3 className="text-xl font-bold mb-2">Frontier Intelligence</h3>
-              <p className="text-gray-400">
-                Powered by a mix of purpose-built and frontier models, DNG Studios is smart and fast.
+              <h3 className="text-lg font-bold mb-2">Smart Notation</h3>
+              <p className="text-gray-400 text-sm">
+                Intelligent music notation with traditional Indian music support.
               </p>
             </div>
             <div className="text-center">
-              <div className="w-16 h-16 bg-gradient-to-r from-blue-600 to-purple-600 rounded-lg flex items-center justify-center mx-auto mb-4">
-                <Code className="w-8 h-8 text-white" />
+              <div className="w-12 h-12 bg-blue-600 rounded-lg flex items-center justify-center mx-auto mb-4">
+                <Code className="w-6 h-6 text-white" />
               </div>
-              <h3 className="text-xl font-bold mb-2">Feels Familiar</h3>
-              <p className="text-gray-400">
-                Import all your extensions, themes, and keybindings in one click.
+              <h3 className="text-lg font-bold mb-2">Easy to Use</h3>
+              <p className="text-gray-400 text-sm">
+                Intuitive interface designed for musicians and composers.
               </p>
             </div>
             <div className="text-center">
-              <div className="w-16 h-16 bg-gradient-to-r from-blue-600 to-purple-600 rounded-lg flex items-center justify-center mx-auto mb-4">
-                <Shield className="w-8 h-8 text-white" />
+              <div className="w-12 h-12 bg-blue-600 rounded-lg flex items-center justify-center mx-auto mb-4">
+                <Shield className="w-6 h-6 text-white" />
               </div>
-              <h3 className="text-xl font-bold mb-2">Privacy Options</h3>
-              <p className="text-gray-400">
-                If you enable Privacy Mode, your music is never stored remotely without your consent. DNG Studios is SOC 2 certified.
+              <h3 className="text-lg font-bold mb-2">Professional</h3>
+              <p className="text-gray-400 text-sm">
+                Export high-quality scores and compositions.
               </p>
             </div>
           </div>
@@ -182,69 +209,32 @@ const LandingPage: React.FC<LandingPageProps> = ({ onLaunchApp, onShowFeatures }
 
 
       {/* CTA Section */}
-      <section className="px-6 py-20">
-        <div className="max-w-4xl mx-auto text-center">
-          <h2 className="text-4xl font-bold mb-6">Ready to start composing?</h2>
-          <p className="text-xl text-gray-400 mb-8">
-            Experience the power of traditional Indian music notation with modern technology.
+      <section className="px-6 py-16">
+        <div className="max-w-2xl mx-auto text-center">
+          <h2 className="text-3xl font-bold mb-6">Start Composing</h2>
+          <p className="text-lg text-gray-400 mb-8">
+            Create beautiful music notation with DNG Studios.
           </p>
-          <div className="flex flex-col sm:flex-row gap-4 justify-center">
-            <button 
-              onClick={onLaunchApp}
-              className="bg-gradient-to-r from-blue-600 to-purple-600 text-white px-8 py-4 rounded-lg hover:from-blue-700 hover:to-purple-700 transition-all duration-200 flex items-center justify-center space-x-2 text-lg font-medium shadow-lg shadow-blue-500/25"
-            >
-              <Play className="w-5 h-5" />
-              <span>Launch DNG Studios</span>
-            </button>
-            <button 
-              onClick={() => setShowContactModal(true)}
-              className="border border-gray-600 text-white px-8 py-4 rounded-lg hover:bg-gray-800 transition-all duration-200 flex items-center justify-center space-x-2 text-lg font-medium"
-            >
-              <Users className="w-5 h-5" />
-              <span>Contact Developer</span>
-            </button>
-          </div>
+          <button 
+            onClick={onLaunchApp}
+            className="bg-blue-600 text-white px-8 py-4 rounded-lg hover:bg-blue-700 transition-all duration-200 text-lg font-medium"
+          >
+            Get Started
+          </button>
         </div>
       </section>
 
       {/* Footer */}
-      <footer className="px-6 py-12 border-t border-gray-800 bg-black">
-        <div className="max-w-6xl mx-auto">
-          <div className="grid md:grid-cols-4 gap-8">
-            <div>
-              <div className="text-2xl font-bold bg-gradient-to-r from-blue-400 to-purple-600 bg-clip-text text-transparent mb-4">
-                DNG Studios
-              </div>
-              <p className="text-gray-400">
-                The traditional Indian music notation editor by DNG Studios that makes composition faster and more intuitive.
-              </p>
-            </div>
-            <div>
-              <h4 className="font-semibold mb-4">Product</h4>
-              <ul className="space-y-2 text-gray-400">
-                <li><a href="#" className="hover:text-white transition-colors">Home</a></li>
-                <li><a href="#" className="hover:text-white transition-colors">Features</a></li>
-                <li><a href="#" className="hover:text-white transition-colors">Downloads</a></li>
-              </ul>
-            </div>
-            <div>
-              <h4 className="font-semibold mb-4">About</h4>
-              <ul className="space-y-2 text-gray-400">
-                <li><a href="#" className="hover:text-white transition-colors">DNG Studios</a></li>
-                <li><a href="#" className="hover:text-white transition-colors">Hamsalekha Vidya Samsthe</a></li>
-                <li><a href="#" className="hover:text-white transition-colors">Dr Hamsalekha</a></li>
-              </ul>
-            </div>
-            <div>
-              <h4 className="font-semibold mb-4">Contact</h4>
-              <ul className="space-y-2 text-gray-400">
-                <li><a href="#" className="hover:text-white transition-colors">Support</a></li>
-                <li><a href="#" className="hover:text-white transition-colors">Feedback</a></li>
-              </ul>
-            </div>
+      <footer className="px-6 py-8 border-t border-gray-800 bg-black">
+        <div className="max-w-4xl mx-auto text-center">
+          <div className="text-xl font-bold text-blue-400 mb-2">
+            DNG Studios
           </div>
-          <div className="border-t border-gray-800 mt-8 pt-8 text-center text-gray-400">
-            <p>© 2025 Made by DNG Studios Team. All rights reserved.</p>
+          <p className="text-gray-400 text-sm mb-4">
+            Professional music notation for traditional Indian compositions.
+          </p>
+          <div className="text-gray-500 text-xs">
+            © 2024 DNG Studios. All rights reserved.
           </div>
         </div>
       </footer>
@@ -261,7 +251,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onLaunchApp, onShowFeatures }
             </button>
             
             <div className="text-center mb-6">
-              <div className="w-24 h-24 bg-gradient-to-r from-blue-600 to-purple-600 rounded-full flex items-center justify-center mx-auto mb-4">
+              <div className="w-24 h-24 bg-blue-600 rounded-full flex items-center justify-center mx-auto mb-4">
                 <User className="w-12 h-12 text-white" />
               </div>
               <h3 className="text-2xl font-bold text-white mb-2">Harshith J</h3>

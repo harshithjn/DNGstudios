@@ -2,9 +2,9 @@
 
 import type React from "react"
 import { useState } from "react"
-import { Type, Settings, Volume2, VolumeX, Play, Pause, Music, Edit, Trash2, Palette, Layout } from "lucide-react"
+import { Type, Settings, Volume2, VolumeX, Play, Pause, Music, Edit, Trash2, Palette, Layout, Pen, Eraser } from "lucide-react"
 import type { ScorePage } from "../hooks/useSupabase"
-import type { LyricElement, HighlighterElement, LayoutSettings } from "../App"
+import type { LyricElement, HighlighterElement, LayoutSettings, DrawingElement } from "../App"
 
 interface RightSidebarProps {
   selectedArticulation: string | null
@@ -29,6 +29,15 @@ interface RightSidebarProps {
 
   layoutSettings: LayoutSettings
   onUpdateLayoutSettings: (settings: Partial<LayoutSettings>) => void
+  
+  // Drawing tools
+  isDrawingMode: boolean
+  onDrawingModeToggle: (enabled: boolean) => void
+  isEraserMode: boolean
+  onEraserModeToggle: (enabled: boolean) => void
+  drawingElements: DrawingElement[]
+  onAddDrawingElement: (element: DrawingElement) => void
+  onRemoveDrawingElement: (id: string) => void
 }
 
 const articulations = [
@@ -40,8 +49,8 @@ const articulations = [
   { id: "trill", name: "Trill", symbol: "tr" },
   { id: "mordent", name: "Mordent", symbol: "𝄽" },
   { id: "turn", name: "Turn", symbol: "𝄾" },
-  { id: "slur", name: "Slur", symbol: "⌒" },
-  { id: "tie", name: "Tie", symbol: "⌒" },
+  { id: "slur", name: "Slur", symbol: "⌒", isExtensible: true },
+  { id: "tie", name: "Tie", symbol: "⌒", isExtensible: true },
   { id: "black-dot", name: "Black Dot", symbol: "●" },
   { id: "outline-dot", name: "Outline Dot", symbol: "○" },
 ]
@@ -97,6 +106,15 @@ const RightSidebar: React.FC<RightSidebarProps> = ({
     hideMutedTracks: false,
   },
   onUpdateLayoutSettings = () => {},
+  
+  // Drawing tools
+  isDrawingMode = false,
+  onDrawingModeToggle = () => {},
+  isEraserMode = false,
+  onEraserModeToggle = () => {},
+  drawingElements = [],
+  onAddDrawingElement = () => {},
+  onRemoveDrawingElement = () => {},
 }) => {
   const [metronomeEnabled, setMetronomeEnabled] = useState(false)
   const [metronomeInterval, setMetronomeInterval] = useState<ReturnType<typeof setInterval> | null>(null)
@@ -368,6 +386,46 @@ const RightSidebar: React.FC<RightSidebarProps> = ({
             <div className="text-sm font-medium">Open Layout Settings</div>
             <div className="mt-1 text-xs text-slate-400">
               Configure margins, spacing, and display options
+            </div>
+          </button>
+        </div>
+
+        {/* Drawing Tools */}
+        <div className="border-b border-slate-700 p-4">
+          <h3 className="mb-3 flex items-center gap-2 text-sm font-medium text-white">
+            <Pen className="h-4 w-4" />
+            Drawing Tools
+          </h3>
+          
+          {/* Pencil Tool */}
+          <button
+            onClick={() => onDrawingModeToggle(!isDrawingMode)}
+            className={`w-full rounded-lg border p-3 transition-all duration-200 mb-2 ${
+              isDrawingMode
+                ? "border-green-500 bg-green-500/10 text-green-400"
+                : "border-slate-600 bg-slate-800/50 text-white hover:border-slate-500 hover:bg-slate-700/50"
+            }`}
+          >
+            <Pen className="mx-auto mb-1 h-5 w-5" />
+            <div className="text-sm font-medium">{isDrawingMode ? "Drawing Mode ON" : "Enable Drawing Mode"}</div>
+            <div className="mt-1 text-xs text-slate-400">
+              {isDrawingMode ? "Click and drag to draw" : "Click to enable freehand drawing"}
+            </div>
+          </button>
+
+          {/* Eraser Tool */}
+          <button
+            onClick={() => onEraserModeToggle(!isEraserMode)}
+            className={`w-full rounded-lg border p-3 transition-all duration-200 ${
+              isEraserMode
+                ? "border-red-500 bg-red-500/10 text-red-400"
+                : "border-slate-600 bg-slate-800/50 text-white hover:border-slate-500 hover:bg-slate-700/50"
+            }`}
+          >
+            <Eraser className="mx-auto mb-1 h-5 w-5" />
+            <div className="text-sm font-medium">{isEraserMode ? "Eraser Mode ON" : "Enable Eraser Mode"}</div>
+            <div className="mt-1 text-xs text-slate-400">
+              {isEraserMode ? "Click to erase drawings" : "Click to enable eraser tool"}
             </div>
           </button>
         </div>

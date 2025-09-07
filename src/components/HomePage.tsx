@@ -77,13 +77,13 @@ const HomePage: React.FC<HomePageProps> = ({ onOpenProject, onLogout, onBackToLa
         }`}
       >
         <div className="text-center">
-          <div className="w-20 h-20 bg-purple-600 rounded-lg flex items-center justify-center mx-auto mb-6">
+          <div className="w-20 h-20 bg-blue-600 rounded-lg flex items-center justify-center mx-auto mb-6">
             <Music2 className="w-10 h-10 text-white animate-pulse" />
           </div>
           <div className="text-3xl font-bold text-white mb-2">DNG Studios</div>
           <div className="text-sm text-gray-400">Professional Music Notation</div>
           <div className="mt-6 w-48 h-1 bg-gray-800 rounded-full mx-auto overflow-hidden">
-            <div className="h-full bg-purple-600 rounded-full animate-pulse" style={{ width: "100%" }}></div>
+            <div className="h-full bg-blue-600 rounded-full animate-pulse" style={{ width: "100%" }}></div>
           </div>
         </div>
       </div>
@@ -97,7 +97,7 @@ const HomePage: React.FC<HomePageProps> = ({ onOpenProject, onLogout, onBackToLa
         <div className="max-w-7xl mx-auto px-6 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-purple-600 rounded-lg flex items-center justify-center">
+              <div className="w-10 h-10 bg-blue-600 rounded-lg flex items-center justify-center">
                 <Music2 className="w-6 h-6 text-white" />
               </div>
               <div>
@@ -108,7 +108,7 @@ const HomePage: React.FC<HomePageProps> = ({ onOpenProject, onLogout, onBackToLa
             <div className="flex items-center gap-3">
               <button
                 onClick={() => setShowCreateModal(true)}
-                className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors duration-200 text-sm font-medium"
+                className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors duration-200 text-sm font-medium"
               >
                 <Plus className="w-4 h-4" />
                 New Project
@@ -149,7 +149,7 @@ const HomePage: React.FC<HomePageProps> = ({ onOpenProject, onLogout, onBackToLa
               placeholder="Search projects..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-10 pr-4 py-2 bg-gray-900 border border-gray-700 rounded-lg focus:ring-1 focus:ring-purple-500 focus:border-purple-500 transition-all duration-200 w-80 text-white placeholder-gray-400"
+              className="pl-10 pr-4 py-2 bg-gray-900 border border-gray-700 rounded-lg focus:ring-1 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 w-80 text-white placeholder-gray-400"
             />
           </div>
           <div className="flex items-center gap-4">
@@ -170,7 +170,7 @@ const HomePage: React.FC<HomePageProps> = ({ onOpenProject, onLogout, onBackToLa
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
             <div className="bg-gray-900 rounded-lg border border-gray-800 p-4">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-purple-600 rounded-lg flex items-center justify-center">
+                <div className="w-10 h-10 bg-blue-600 rounded-lg flex items-center justify-center">
                   <Music2 className="w-5 h-5 text-white" />
                 </div>
                 <div>
@@ -211,7 +211,7 @@ const HomePage: React.FC<HomePageProps> = ({ onOpenProject, onLogout, onBackToLa
         {/* Loading State */}
         {loading && (
           <div className="text-center py-16">
-            <Loader2 className="w-8 h-8 animate-spin mx-auto mb-4 text-purple-600" />
+            <Loader2 className="w-8 h-8 animate-spin mx-auto mb-4 text-blue-600" />
             <p className="text-gray-400">Loading projects...</p>
           </div>
         )}
@@ -226,7 +226,7 @@ const HomePage: React.FC<HomePageProps> = ({ onOpenProject, onLogout, onBackToLa
             <p className="text-gray-400 mb-6 max-w-md mx-auto">{error}</p>
             <button
               onClick={() => window.location.reload()}
-              className="inline-flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors duration-200 font-medium"
+              className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors duration-200 font-medium"
             >
               <RotateCcw className="w-4 h-4" />
               Retry
@@ -241,7 +241,7 @@ const HomePage: React.FC<HomePageProps> = ({ onOpenProject, onLogout, onBackToLa
               <h2 className="text-lg font-semibold text-white">Recent Projects</h2>
               <button
                 onClick={() => setShowCreateModal(true)}
-                className="text-sm text-purple-400 hover:text-purple-300 transition-colors duration-200"
+                className="text-sm text-blue-400 hover:text-blue-300 transition-colors duration-200"
               >
                 View All
               </button>
@@ -271,7 +271,7 @@ const HomePage: React.FC<HomePageProps> = ({ onOpenProject, onLogout, onBackToLa
                       </div>
                       <span
                         className={`px-2 py-0.5 rounded-full text-xs font-medium ${
-                          project.projectType === "DNG" ? "bg-purple-600 text-white" : "bg-blue-600 text-white"
+                          project.projectType === "DNG" ? "bg-blue-600 text-white" : "bg-green-600 text-white"
                         }`}
                       >
                         {project.projectType}
@@ -318,7 +318,7 @@ const HomePage: React.FC<HomePageProps> = ({ onOpenProject, onLogout, onBackToLa
             {projects.length === 0 && (
               <button
                 onClick={() => setShowCreateModal(true)}
-                className="inline-flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors duration-200 font-medium"
+                className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors duration-200 font-medium"
               >
                 <Plus className="w-4 h-4" />
                 Create Project
@@ -378,7 +378,7 @@ const HomePage: React.FC<HomePageProps> = ({ onOpenProject, onLogout, onBackToLa
                   <div className="flex items-center gap-1">
                     <span
                       className={`px-2 py-0.5 rounded-full text-xs font-medium ${
-                        project.projectType === "DNG" ? "bg-purple-600 text-white" : "bg-blue-600 text-white"
+                        project.projectType === "DNG" ? "bg-blue-600 text-white" : "bg-green-600 text-white"
                       }`}
                     >
                       {project.projectType}
@@ -393,7 +393,7 @@ const HomePage: React.FC<HomePageProps> = ({ onOpenProject, onLogout, onBackToLa
 
                 <button
                   onClick={() => onOpenProject(project.id, project.projectType || 'DNG')} // Pass projectType
-                  className="w-full flex items-center justify-center gap-2 px-3 py-2 bg-gray-800 text-white rounded-lg hover:bg-purple-600 transition-colors duration-200 text-sm"
+                  className="w-full flex items-center justify-center gap-2 px-3 py-2 bg-gray-800 text-white rounded-lg hover:bg-blue-600 transition-colors duration-200 text-sm"
                 >
                   <Edit className="w-4 h-4" />
                   Open
@@ -419,7 +419,7 @@ const HomePage: React.FC<HomePageProps> = ({ onOpenProject, onLogout, onBackToLa
                     onClick={() => setFormData({ ...formData, projectType: "DNG" })}
                     className={`flex-1 px-4 py-2 rounded-lg transition-colors duration-200 font-medium ${
                       formData.projectType === "DNG"
-                        ? "bg-purple-600 text-white hover:bg-purple-700"
+                        ? "bg-blue-600 text-white hover:bg-blue-700"
                         : "bg-gray-800 text-gray-300 border border-gray-600 hover:bg-gray-700"
                     }`}
                   >
@@ -430,7 +430,7 @@ const HomePage: React.FC<HomePageProps> = ({ onOpenProject, onLogout, onBackToLa
                     onClick={() => setFormData({ ...formData, projectType: "DNR" })}
                     className={`flex-1 px-4 py-2 rounded-lg transition-colors duration-200 font-medium ${
                       formData.projectType === "DNR"
-                        ? "bg-purple-600 text-white hover:bg-purple-700"
+                        ? "bg-green-600 text-white hover:bg-green-700"
                         : "bg-gray-800 text-gray-300 border border-gray-600 hover:bg-gray-700"
                     }`}
                   >
@@ -446,7 +446,7 @@ const HomePage: React.FC<HomePageProps> = ({ onOpenProject, onLogout, onBackToLa
                     type="text"
                     value={formData.title}
                     onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-                    className="w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded-lg focus:ring-1 focus:ring-purple-500 focus:border-purple-500 transition-all duration-200 text-white placeholder-gray-400"
+                    className="w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded-lg focus:ring-1 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 text-white placeholder-gray-400"
                     placeholder="Enter project title"
                     required
                   />
@@ -458,7 +458,7 @@ const HomePage: React.FC<HomePageProps> = ({ onOpenProject, onLogout, onBackToLa
                     type="text"
                     value={formData.composer}
                     onChange={(e) => setFormData({ ...formData, composer: e.target.value })}
-                    className="w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded-lg focus:ring-1 focus:ring-purple-500 focus:border-purple-500 transition-all duration-200 text-white placeholder-gray-400"
+                    className="w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded-lg focus:ring-1 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 text-white placeholder-gray-400"
                     placeholder="Enter composer name"
                     required
                   />
@@ -488,7 +488,7 @@ const HomePage: React.FC<HomePageProps> = ({ onOpenProject, onLogout, onBackToLa
                   </button>
                   <button
                     type="submit"
-                    className="flex-1 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors duration-200 font-medium"
+                    className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors duration-200 font-medium"
                   >
                     Create
                   </button>

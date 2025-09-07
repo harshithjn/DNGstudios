@@ -61,6 +61,16 @@ export interface HighlighterElement {
   opacity: number
 }
 
+export interface DrawingElement {
+  id: string
+  type: 'path' | 'line' | 'circle' | 'rectangle'
+  points: { x: number; y: number }[]
+  strokeColor: string
+  strokeWidth: number
+  fillColor?: string
+  opacity: number
+}
+
 export interface DefaultBarLine {
   id: string
   x: number
@@ -105,6 +115,11 @@ function App() {
   const [articulationElements, setArticulationElements] = useState<ArticulationElement[]>([])
   const [lyricElements, setLyricElements] = useState<LyricElement[]>([])
   const [highlighterElements, setHighlighterElements] = useState<HighlighterElement[]>([])
+  const [drawingElements, setDrawingElements] = useState<DrawingElement[]>([])
+  
+  // Drawing mode states
+  const [isDrawingMode, setIsDrawingMode] = useState(false)
+  const [isEraserMode, setIsEraserMode] = useState(false)
   
   // Ref to track current articulations for reliable access
   const articulationElementsRef = useRef<ArticulationElement[]>([])
@@ -932,6 +947,33 @@ function App() {
     })
   }
 
+  // Drawing handlers
+  const handleAddDrawingElement = (drawingElement: DrawingElement) => {
+    const newDrawingElements = [...drawingElements, drawingElement]
+    setDrawingElements(newDrawingElements)
+    
+    // Push to unified history
+    pushHistoryState({
+      notes: currentProject?.notes || [],
+      textElements: textElements,
+      articulationElements: articulationElementsRef.current,
+      timestamp: Date.now()
+    })
+  }
+
+  const handleRemoveDrawingElement = (id: string) => {
+    const newDrawingElements = drawingElements.filter(el => el.id !== id)
+    setDrawingElements(newDrawingElements)
+    
+    // Push to unified history
+    pushHistoryState({
+      notes: currentProject?.notes || [],
+      textElements: textElements,
+      articulationElements: articulationElementsRef.current,
+      timestamp: Date.now()
+    })
+  }
+
   const handleUpdateHighlighter = (id: string, updates: Partial<HighlighterElement>) => {
     const newHighlighterElements = highlighterElements.map(el => el.id === id ? { ...el, ...updates } : el)
     setHighlighterElements(newHighlighterElements)
@@ -1166,6 +1208,11 @@ function App() {
             onUpdateHighlighter={handleUpdateHighlighter}
             layoutSettings={layoutSettings}
             onUpdateLayoutSettings={handleUpdateLayoutSettings}
+            isDrawingMode={isDrawingMode}
+            isEraserMode={isEraserMode}
+            drawingElements={drawingElements}
+            onAddDrawingElement={handleAddDrawingElement}
+            onRemoveDrawingElement={handleRemoveDrawingElement}
             canUndo={canUndoAction}
             canRedo={canRedoAction}
             onUndo={undoAction}
@@ -1205,6 +1252,11 @@ function App() {
 
             layoutSettings={layoutSettings}
             onUpdateLayoutSettings={handleUpdateLayoutSettings}
+            isDrawingMode={isDrawingMode}
+            isEraserMode={isEraserMode}
+            drawingElements={drawingElements}
+            onAddDrawingElement={handleAddDrawingElement}
+            onRemoveDrawingElement={handleRemoveDrawingElement}
             canUndo={canUndoAction}
             canRedo={canRedoAction}
             onUndo={undoAction}
@@ -1235,6 +1287,13 @@ function App() {
           onUpdateHighlighter={handleUpdateHighlighter}
           layoutSettings={layoutSettings}
           onUpdateLayoutSettings={handleUpdateLayoutSettings}
+          isDrawingMode={isDrawingMode}
+          onDrawingModeToggle={setIsDrawingMode}
+          isEraserMode={isEraserMode}
+          onEraserModeToggle={setIsEraserMode}
+          drawingElements={drawingElements}
+          onAddDrawingElement={handleAddDrawingElement}
+          onRemoveDrawingElement={handleRemoveDrawingElement}
         />
       </div>
     </div>
