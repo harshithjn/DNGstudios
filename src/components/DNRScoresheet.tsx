@@ -14,7 +14,8 @@ import {
   Underline,
   Piano,
 } from "lucide-react"
-import { notations, getNotationByKey, type Notation } from "../data/notations"
+import { dnrNotations, getDNRNotationByKey, type DNRNotation } from "../data/dnrNotations"
+import type { Notation } from "../data/notations"
 import html2canvas from "html2canvas"
 import jsPDF from "jspdf"
 import type { TextElement, ArticulationElement, LyricElement, HighlighterElement, DrawingElement } from "../App"
@@ -158,11 +159,11 @@ const midiNoteToNotationMap: { [key: number]: string } = {
 }
 
 const KEY_SIGNATURE_OPTIONS = [
-  { label: "C Major / A Minor", value: "C" },
-  { label: "G Major / E Minor", value: "G" },
-  { label: "D Major / B Minor", value: "D" },
-  { label: "F Major / D Minor", value: "F" },
-  { label: "B Major / G Minor", value: "B" },
+  { label: "C Major", value: "C" },
+  { label: "G Major", value: "G" },
+  { label: "D Major", value: "D" },
+  { label: "F Major", value: "F" },
+  { label: "B Major", value: "B" },
 ]
 
 const TIME_SIGNATURE_OPTIONS = [
@@ -688,7 +689,7 @@ const DNRScoresheet: React.FC<DNRScoresheetProps> = ({
         return
       }
       
-      const mappedNotation = getNotationByKey(key)
+      const mappedNotation = getDNRNotationByKey(key)
 
 
 
@@ -757,7 +758,7 @@ const DNRScoresheet: React.FC<DNRScoresheetProps> = ({
       if ((status & 0xf0) === NOTE_ON && velocity > 0) {
         const mappedAlphabet = midiNoteToNotationMap[note]
         if (mappedAlphabet) {
-          const mappedNotation = getNotationByKey(mappedAlphabet)
+          const mappedNotation = getDNRNotationByKey(mappedAlphabet)
           if (mappedNotation) {
             placeNotation(mappedNotation)
           }
@@ -1562,7 +1563,7 @@ const DNRScoresheet: React.FC<DNRScoresheetProps> = ({
                   <img
                     src={placedNote.notation?.image || "/placeholder.svg"}
                     alt={placedNote.notation?.name || "Image"}
-                    className={`w-[80px] h-[80px] object-contain transition-all duration-200 ${
+                    className={`w-[56px] h-[56px] object-contain transition-all duration-200 ${
                       draggedNoteId === placedNote.id 
                         ? 'drop-shadow-2xl scale-105' 
                         : selectedNoteId === placedNote.id
@@ -2082,7 +2083,7 @@ const DNRScoresheet: React.FC<DNRScoresheetProps> = ({
                       {Object.entries(midiNoteToNotationMap)
                         .slice(0, 26)
                         .map(([midiNote, alphabetKey]) => {
-                          const notation = getNotationByKey(alphabetKey)
+                          const notation = getDNRNotationByKey(alphabetKey)
                           return (
                             <li key={midiNote} className="text-xs">
                               • MIDI {midiNote} →{" "}
@@ -2099,7 +2100,7 @@ const DNRScoresheet: React.FC<DNRScoresheetProps> = ({
                       {Object.entries(midiNoteToNotationMap)
                         .slice(26)
                         .map(([midiNote, alphabetKey]) => {
-                          const notation = getNotationByKey(alphabetKey)
+                          const notation = getDNRNotationByKey(alphabetKey)
                           return (
                             <li key={midiNote} className="text-xs">
                               • MIDI {midiNote} →{" "}

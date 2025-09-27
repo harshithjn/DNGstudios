@@ -4,6 +4,7 @@ import React, { useState, useEffect, useCallback, useRef } from "react"
 import HomePage from "./components/HomePage"
 import ProjectHeader from "./components/ProjectHeader"
 import NotePalette from "./components/NotePalette"
+import DNRNotePalette from "./components/DNRNotePalette"
 
 import ScoreSheet from "./components/ScoreSheet"
 import DNRScoresheet from "./components/DNRScoresheet"
@@ -1173,10 +1174,17 @@ function App() {
         scoreMode={scoreMode}
       />
       <div className="flex flex-1">
-        <NotePalette
-          selectedNotation={selectedNotation}
-          onNotationSelect={setSelectedNotation}
-        />
+        {scoreMode === 'dnr' ? (
+          <DNRNotePalette
+            selectedNotation={selectedNotation}
+            onNotationSelect={setSelectedNotation}
+          />
+        ) : (
+          <NotePalette
+            selectedNotation={selectedNotation}
+            onNotationSelect={setSelectedNotation}
+          />
+        )}
         {scoreMode === 'dnr' ? (
           <DNRScoresheet
             selectedNotation={selectedNotation}
