@@ -12,6 +12,7 @@ import RightSidebar from "./components/RightSidebar"
 import Auth from "./components/Auth"
 import LandingPage from "./components/LandingPage"
 import FeaturesPage from "./components/FeaturesPage"
+import MidiTestPage from "./components/MidiTestPage"
 import PageNavigation from "./components/PageNavigation"
 import LayoutSettings from "./components/LayoutSettings"
 import { useLocalStorage, type ScorePage, type PlacedNotation } from "./hooks/useLocalStorage"
@@ -89,6 +90,7 @@ function App() {
     return !savedProjectId || !savedProject
   })
   const [showFeaturesPage, setShowFeaturesPage] = useState(false)
+  const [showMidiTestPage, setShowMidiTestPage] = useState(false)
   const [currentProjectId, setCurrentProjectId] = useState<string | null>(() => {
     return localStorage.getItem('currentProjectId')
   })
@@ -238,11 +240,19 @@ function App() {
   const handleBackToLanding = useCallback(() => {
     setShowLandingPage(true)
     setShowFeaturesPage(false)
+    setShowMidiTestPage(false)
   }, [])
 
   const handleShowFeatures = useCallback(() => {
     setShowLandingPage(false)
     setShowFeaturesPage(true)
+    setShowMidiTestPage(false)
+  }, [])
+
+  const handleShowMidiTest = useCallback(() => {
+    setShowLandingPage(false)
+    setShowFeaturesPage(false)
+    setShowMidiTestPage(true)
   }, [])
 
   const handleOpenProject = useCallback(async (projectId: string, projectType: "DNG" | "DNR") => {
@@ -1132,12 +1142,17 @@ function App() {
 
   // Show landing page first
   if (showLandingPage) {
-    return <LandingPage onLaunchApp={handleLaunchApp} onShowFeatures={handleShowFeatures} />
+    return <LandingPage onLaunchApp={handleLaunchApp} onShowFeatures={handleShowFeatures} onShowMidiTest={handleShowMidiTest} />
   }
 
   // Show features page
   if (showFeaturesPage) {
     return <FeaturesPage onBackToLanding={handleBackToLanding} onLaunchApp={handleLaunchApp} />
+  }
+
+  // Show MIDI test page
+  if (showMidiTestPage) {
+    return <MidiTestPage onBack={handleBackToLanding} />
   }
 
   // Show authentication screen if not authenticated

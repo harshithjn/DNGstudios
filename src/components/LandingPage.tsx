@@ -1,12 +1,13 @@
 import React, { useState } from 'react'
-import { Code, Brain, Shield, Play, User, Mail, Linkedin, X } from 'lucide-react'
+import { Code, Brain, Shield, Play, User, Mail, Linkedin, X, Music } from 'lucide-react'
 
 interface LandingPageProps {
   onLaunchApp: () => void
   onShowFeatures: () => void
+  onShowMidiTest: () => void
 }
 
-const LandingPage: React.FC<LandingPageProps> = ({ onLaunchApp, onShowFeatures }) => {
+const LandingPage: React.FC<LandingPageProps> = ({ onLaunchApp, onShowFeatures, onShowMidiTest }) => {
   const [showContactModal, setShowContactModal] = useState(false)
 
   return (
@@ -48,13 +49,20 @@ const LandingPage: React.FC<LandingPageProps> = ({ onLaunchApp, onShowFeatures }
           <p className="text-lg text-gray-400 mb-12 max-w-xl mx-auto">
             Professional music notation for traditional Indian compositions.
           </p>
-          <div className="flex justify-center items-center">
+          <div className="flex justify-center items-center space-x-4">
             <button 
               onClick={onLaunchApp}
               className="bg-blue-600 text-white px-8 py-4 rounded-lg hover:bg-blue-700 transition-all duration-200 flex items-center space-x-2 text-lg font-medium"
             >
               <Play className="w-5 h-5" />
               <span>Get Started</span>
+            </button>
+            <button 
+              onClick={onShowMidiTest}
+              className="bg-purple-600 text-white px-6 py-4 rounded-lg hover:bg-purple-700 transition-all duration-200 flex items-center space-x-2 text-lg font-medium"
+            >
+              <Music className="w-5 h-5" />
+              <span>MIDI Test</span>
             </button>
           </div>
         </div>
